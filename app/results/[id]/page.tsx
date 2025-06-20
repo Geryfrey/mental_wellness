@@ -5,12 +5,25 @@ import { useRouter, useParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { TopNavLayout } from "@/components/layout/top-nav-layout"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { getCurrentUser } from "@/lib/auth"
 import { supabase } from "@/lib/supabase/client"
 import type { User, Assessment } from "@/lib/types"
-import { Brain, Calendar, AlertCircle, CheckCircle, ArrowLeft, TrendingUp, PieChart } from "lucide-react"
+import {
+  Brain,
+  Calendar,
+  AlertCircle,
+  CheckCircle,
+  ArrowLeft,
+  TrendingUp,
+  PieChart,
+  AlertTriangle,
+  Info,
+  Heart,
+  Target,
+} from "lucide-react"
 import {
   LineChart,
   Line,
@@ -28,6 +41,7 @@ export default function AssessmentResultPage() {
   const [assessment, setAssessment] = useState<Assessment | null>(null)
   const [historicalData, setHistoricalData] = useState<Assessment[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const params = useParams()
 
@@ -46,19 +60,28 @@ export default function AssessmentResultPage() {
         setUser(currentUser)
 
         // Get student ID
-        const { data: student } = await supabase.from("students").select("id").eq("user_id", currentUser.id).single()
+        const { data: student, error: studentError } = await supabase
+          .from("students")
+          .select("id")
+          .eq("user_id", currentUser.id)
+          .single()
 
-        if (!student) throw new Error("Student profile not found")
+        if (studentError || !student) {
+          throw new Error("Student profile not found")
+        }
 
         // Get specific assessment
-        const { data: assessmentData, error } = await supabase
+        const { data: assessmentData, error: assessmentError } = await supabase
           .from("assessments")
           .select("*")
           .eq("id", params.id)
           .eq("student_id", student.id)
           .single()
 
-        if (error) throw error
+        if (assessmentError) {
+          throw new Error(`Assessment not found: ${assessmentError.message}`)
+        }
+
         setAssessment(assessmentData)
 
         // Get historical assessments for trends
@@ -69,11 +92,15 @@ export default function AssessmentResultPage() {
           .order("created_at", { ascending: true })
           .limit(10)
 
-        if (historyError) throw historyError
-        setHistoricalData(historicalAssessments || [])
-      } catch (error) {
+        if (historyError) {
+          console.warn("Could not load historical data:", historyError)
+          setError("Historical data unavailable")
+        } else {
+          setHistoricalData(historicalAssessments || [])
+        }
+      } catch (error: any) {
         console.error("Error loading assessment:", error)
-        router.push("/results")
+        setError(error.message || "Failed to load assessment data")
       } finally {
         setLoading(false)
       }
@@ -90,6 +117,28 @@ export default function AssessmentResultPage() {
           <p>Loading assessment details...</p>
         </div>
       </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <TopNavLayout user={user}>
+        <div className="max-w-2xl mx-auto">
+          <Alert className="border-red-200 bg-red-50">
+            <AlertTriangle className="h-4 w-4 text-red-600" />
+            <AlertTitle className="text-red-800">Error Loading Assessment</AlertTitle>
+            <AlertDescription className="text-red-700">{error}</AlertDescription>
+          </Alert>
+          <div className="mt-4">
+            <Link href="/results">
+              <Button variant="outline">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Results
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </TopNavLayout>
     )
   }
 
@@ -117,9 +166,9 @@ export default function AssessmentResultPage() {
       case "moderate":
         return <AlertCircle className="h-4 w-4" />
       case "high":
-        return <AlertCircle className="h-4 w-4" />
+        return <AlertTriangle className="h-4 w-4" />
       case "critical":
-        return <AlertCircle className="h-4 w-4" />
+        return <AlertTriangle className="h-4 w-4" />
       default:
         return <AlertCircle className="h-4 w-4" />
     }
@@ -133,7 +182,24 @@ export default function AssessmentResultPage() {
     return "text-green-600"
   }
 
-  // Prepare chart data
+  const getSentimentColor = (sentiment?: string) => {
+    switch (sentiment) {
+      case "very_positive":
+        return "text-green-600"
+      case "positive":
+        return "text-green-500"
+      case "neutral":
+        return "text-gray-500"
+      case "negative":
+        return "text-orange-500"
+      case "very_negative":
+        return "text-red-600"
+      default:
+        return "text-gray-500"
+    }
+  }
+
+  // Prepare chart data from real assessment data
   const chartData = historicalData.map((item, index) => ({
     assessment: `Assessment ${index + 1}`,
     date: new Date(item.created_at).toLocaleDateString(),
@@ -141,9 +207,10 @@ export default function AssessmentResultPage() {
     anxiety: item.anxiety_score || 0,
     depression: item.depression_score || 0,
     wellbeing: item.overall_wellbeing_score || 0,
+    sentiment: item.sentiment_score || 50,
   }))
 
-  // Risk level distribution data
+  // Risk level distribution from real data
   const riskDistribution = historicalData.reduce(
     (acc, item) => {
       const risk = item.risk_level || "unknown"
@@ -154,10 +221,19 @@ export default function AssessmentResultPage() {
   )
 
   const pieData = Object.entries(riskDistribution).map(([level, count]) => ({
-    name: level,
+    name: level.charAt(0).toUpperCase() + level.slice(1),
     value: count,
     color: level === "low" ? "#10b981" : level === "moderate" ? "#f59e0b" : level === "high" ? "#f97316" : "#ef4444",
   }))
+
+  // Conditions data from real API response
+  const conditionsData = assessment.predicted_conditions
+    ? assessment.predicted_conditions.map((condition: string) => ({
+        name: condition.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
+        value: 1,
+        color: "#8b5cf6",
+      }))
+    : []
 
   return (
     <TopNavLayout user={user}>
@@ -187,7 +263,31 @@ export default function AssessmentResultPage() {
           </div>
         </div>
 
-        {/* Top Metrics Cards */}
+        {/* Alert for Professional Help */}
+        {assessment.professional_help_needed && (
+          <Alert className="mb-6 border-orange-200 bg-orange-50">
+            <AlertTriangle className="h-4 w-4 text-orange-600" />
+            <AlertTitle className="text-orange-800">Professional Support Recommended</AlertTitle>
+            <AlertDescription className="text-orange-700">
+              Based on your assessment, we recommend speaking with a mental health professional for personalized support
+              and guidance.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Crisis Alert */}
+        {assessment.crisis_indicators && (
+          <Alert className="mb-6 border-red-200 bg-red-50">
+            <AlertTriangle className="h-4 w-4 text-red-600" />
+            <AlertTitle className="text-red-800">Immediate Support Needed</AlertTitle>
+            <AlertDescription className="text-red-700">
+              Your responses indicate you may need immediate support. Please consider contacting a crisis helpline or
+              emergency services if you're in immediate danger.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Top Metrics Cards - Using Real API Data */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card>
             <CardHeader className="pb-2">
@@ -213,10 +313,15 @@ export default function AssessmentResultPage() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Sleep Hours</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">Sentiment Score</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-gray-500">N/A</div>
+              <div className={`text-2xl font-bold ${getSentimentColor(assessment.sentiment_label)}`}>
+                {assessment.sentiment_score ? `${assessment.sentiment_score}/100` : "N/A"}
+              </div>
+              {assessment.sentiment_label && (
+                <div className="text-sm text-gray-500 capitalize">{assessment.sentiment_label.replace("_", " ")}</div>
+              )}
             </CardContent>
           </Card>
 
@@ -225,9 +330,12 @@ export default function AssessmentResultPage() {
               <CardTitle className="text-sm font-medium text-gray-600">Risk Level</CardTitle>
             </CardHeader>
             <CardContent>
-              <Badge className={`${getRiskLevelColor(assessment.risk_level)} flex items-center gap-1 w-fit`}>
-                {getRiskLevelIcon(assessment.risk_level)}
-                {assessment.risk_level || "Unknown"}
+              <Badge
+                className={`${getRiskLevelColor(assessment.predicted_risk_level || assessment.risk_level)} flex items-center gap-1 w-fit`}
+              >
+                {getRiskLevelIcon(assessment.predicted_risk_level || assessment.risk_level)}
+                {(assessment.predicted_risk_level || assessment.risk_level || "Unknown").charAt(0).toUpperCase() +
+                  (assessment.predicted_risk_level || assessment.risk_level || "unknown").slice(1)}
               </Badge>
             </CardContent>
           </Card>
@@ -260,8 +368,8 @@ export default function AssessmentResultPage() {
                       label: "Depression",
                       color: "hsl(var(--chart-3))",
                     },
-                    wellbeing: {
-                      label: "Wellbeing",
+                    sentiment: {
+                      label: "Sentiment",
                       color: "hsl(var(--chart-4))",
                     },
                   }}
@@ -289,17 +397,10 @@ export default function AssessmentResultPage() {
                       />
                       <Line
                         type="monotone"
-                        dataKey="depression"
-                        stroke="var(--color-depression)"
+                        dataKey="sentiment"
+                        stroke="var(--color-sentiment)"
                         strokeWidth={2}
-                        dot={{ fill: "var(--color-depression)" }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="wellbeing"
-                        stroke="var(--color-wellbeing)"
-                        strokeWidth={2}
-                        dot={{ fill: "var(--color-wellbeing)" }}
+                        dot={{ fill: "var(--color-sentiment)" }}
                       />
                     </LineChart>
                   </ResponsiveContainer>
@@ -308,8 +409,7 @@ export default function AssessmentResultPage() {
                 <div className="h-64 flex items-center justify-center border-2 border-dashed border-gray-200 rounded-lg">
                   <div className="text-center">
                     <TrendingUp className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                    <p className="text-gray-500">Wellness trend visualization would appear here</p>
-                    <p className="text-sm text-gray-400">Take more assessments to see trends</p>
+                    <p className="text-gray-500">Take more assessments to see trends</p>
                   </div>
                 </div>
               )}
@@ -326,7 +426,7 @@ export default function AssessmentResultPage() {
               <CardDescription>Distribution of your risk assessments</CardDescription>
             </CardHeader>
             <CardContent>
-              {pieData.length > 0 ? (
+              {pieData.length > 0 && historicalData.length > 1 ? (
                 <ChartContainer
                   config={{
                     low: {
@@ -362,8 +462,25 @@ export default function AssessmentResultPage() {
               ) : (
                 <div className="h-64 flex items-center justify-center">
                   <div className="relative">
-                    <div className="w-32 h-32 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center">
-                      <div className="text-white font-semibold text-sm">{assessment.risk_level || "Unknown"}</div>
+                    <div
+                      className={`w-32 h-32 rounded-full flex items-center justify-center ${
+                        assessment.predicted_risk_level === "low"
+                          ? "bg-gradient-to-br from-green-400 to-green-500"
+                          : assessment.predicted_risk_level === "moderate"
+                            ? "bg-gradient-to-br from-yellow-400 to-orange-500"
+                            : assessment.predicted_risk_level === "high"
+                              ? "bg-gradient-to-br from-orange-400 to-red-500"
+                              : assessment.predicted_risk_level === "critical"
+                                ? "bg-gradient-to-br from-red-400 to-red-600"
+                                : "bg-gradient-to-br from-gray-400 to-gray-500"
+                      }`}
+                    >
+                      <div className="text-white font-semibold text-sm text-center">
+                        {(assessment.predicted_risk_level || assessment.risk_level || "Unknown")
+                          .charAt(0)
+                          .toUpperCase() +
+                          (assessment.predicted_risk_level || assessment.risk_level || "unknown").slice(1)}
+                      </div>
                     </div>
                     <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-sm text-gray-600">
                       Current Assessment
@@ -377,47 +494,51 @@ export default function AssessmentResultPage() {
 
         {/* Bottom Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Common Conditions */}
+          {/* Predicted Conditions - Using Real API Data */}
           <Card>
             <CardHeader>
-              <CardTitle>Common Conditions</CardTitle>
-              <CardDescription>Most frequently identified conditions</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <Heart className="h-5 w-5 text-purple-600" />
+                Identified Conditions
+              </CardTitle>
+              <CardDescription>Conditions identified from your assessment</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {assessment.ai_analysis ? (
-                  <div className="text-sm text-gray-600">
-                    <p>{assessment.ai_analysis}</p>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <div className="w-16 h-1 bg-gray-200 rounded mx-auto mb-4"></div>
-                    <p className="text-gray-500">No specific conditions identified</p>
-                  </div>
-                )}
-              </div>
+              {conditionsData.length > 0 ? (
+                <div className="space-y-3">
+                  {conditionsData.map((condition, index) => (
+                    <div key={index} className="flex items-center gap-3 p-3 bg-purple-50 rounded-lg">
+                      <div className="w-3 h-3 bg-purple-600 rounded-full"></div>
+                      <span className="text-gray-700 font-medium">{condition.name}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Heart className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                  <p className="text-gray-500">No specific conditions identified</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Sentiment Analysis */}
+          {/* AI Analysis - Using Real API Response */}
           <Card>
             <CardHeader>
-              <CardTitle>Sentiment Analysis</CardTitle>
-              <CardDescription>Your emotional sentiment over time</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <Brain className="h-5 w-5 text-purple-600" />
+                AI Analysis
+              </CardTitle>
+              <CardDescription>Detailed analysis of your mental health state</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {assessment.sentiment_label ? (
-                  <div className="flex items-center gap-2">
-                    <div className="text-sm text-gray-600">Current Sentiment:</div>
-                    <Badge variant="outline" className="capitalize">
-                      {assessment.sentiment_label.replace("_", " ")}
-                    </Badge>
-                  </div>
+                {assessment.ai_analysis ? (
+                  <div className="text-sm text-gray-700 leading-relaxed">{assessment.ai_analysis}</div>
                 ) : (
                   <div className="text-center py-8">
-                    <div className="w-16 h-1 bg-gray-200 rounded mx-auto mb-4"></div>
-                    <p className="text-gray-500">Sentiment analysis not available</p>
+                    <Info className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                    <p className="text-gray-500">Analysis not available</p>
                   </div>
                 )}
               </div>
@@ -425,19 +546,45 @@ export default function AssessmentResultPage() {
           </Card>
         </div>
 
-        {/* Recommendations */}
+        {/* Recommendations - Using Real API Data */}
         {assessment.recommendations && assessment.recommendations.length > 0 && (
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Target className="h-5 w-5 text-purple-600" />
+                Personalized Recommendations
+              </CardTitle>
+              <CardDescription>AI-generated suggestions based on your assessment</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {assessment.recommendations.map((recommendation, index) => (
+                  <div key={index} className="flex items-start gap-3 p-4 bg-purple-50 rounded-lg">
+                    <div className="w-2 h-2 bg-purple-600 rounded-full mt-2 flex-shrink-0"></div>
+                    <p className="text-gray-700">{recommendation}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Immediate Actions - Using Real API Data */}
+        {assessment.immediate_actions && assessment.immediate_actions.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>Recommendations</CardTitle>
-              <CardDescription>Personalized suggestions based on your assessment</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                Immediate Actions
+              </CardTitle>
+              <CardDescription>Steps you can take right now</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {assessment.recommendations.map((recommendation, index) => (
-                  <div key={index} className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg">
-                    <div className="w-2 h-2 bg-purple-600 rounded-full mt-2 flex-shrink-0"></div>
-                    <p className="text-gray-700">{recommendation}</p>
+                {assessment.immediate_actions.map((action, index) => (
+                  <div key={index} className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
+                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                    <p className="text-gray-700">{action}</p>
                   </div>
                 ))}
               </div>

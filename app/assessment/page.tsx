@@ -1,211 +1,115 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
-import { Progress } from "@/components/ui/progress"
-import { TopNavLayout } from "@/components/layout/top-nav-layout"
-import { getCurrentUser } from "@/lib/auth"
-import { supabase } from "@/lib/supabase/client"
-import type { User } from "@/lib/types"
-import { Brain, ArrowLeft, ArrowRight } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
+import { Progress } from "@/components/ui/progress"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { AlertCircle, CheckCircle2, Loader2, Brain } from "lucide-react"
+import { TopNavLayout } from "@/components/layout/top-nav-layout"
+import { supabase } from "@/lib/supabase/client"
+import { getCurrentUser } from "@/lib/auth"
+import { useRouter } from "next/navigation"
+import type { User } from "@/lib/types"
 
-const assessmentQuestions = [
+const questions = [
   {
-    id: "mood",
-    category: "mood",
-    question: "How would you describe your overall mood in the past week?",
+    id: "stress_level",
+    question: "How would you rate your current stress level?",
+    type: "radio",
     options: [
-      { value: "very_poor", label: "Very poor" },
-      { value: "poor", label: "Poor" },
-      { value: "fair", label: "Fair" },
-      { value: "good", label: "Good" },
-      { value: "excellent", label: "Excellent" },
-    ],
-  },
-  {
-    id: "anxiety",
-    category: "anxiety",
-    question: "How often have you felt nervous, anxious, or on edge?",
-    options: [
-      { value: "nearly_every_day", label: "Nearly every day" },
-      { value: "more_than_half_days", label: "More than half the days" },
-      { value: "several_days", label: "Several days" },
-      { value: "not_at_all", label: "Not at all" },
-    ],
-  },
-  {
-    id: "worry",
-    category: "anxiety",
-    question: "How often have you been unable to stop or control worrying?",
-    options: [
-      { value: "nearly_every_day", label: "Nearly every day" },
-      { value: "more_than_half_days", label: "More than half the days" },
-      { value: "several_days", label: "Several days" },
-      { value: "not_at_all", label: "Not at all" },
-    ],
-  },
-  {
-    id: "interest",
-    category: "depression",
-    question: "How often have you had little interest or pleasure in doing things?",
-    options: [
-      { value: "nearly_every_day", label: "Nearly every day" },
-      { value: "more_than_half_days", label: "More than half the days" },
-      { value: "several_days", label: "Several days" },
-      { value: "not_at_all", label: "Not at all" },
-    ],
-  },
-  {
-    id: "hopeless",
-    category: "depression",
-    question: "How often have you felt down, depressed, or hopeless?",
-    options: [
-      { value: "nearly_every_day", label: "Nearly every day" },
-      { value: "more_than_half_days", label: "More than half the days" },
-      { value: "several_days", label: "Several days" },
-      { value: "not_at_all", label: "Not at all" },
-    ],
-  },
-  {
-    id: "sleep",
-    category: "general",
-    question: "How would you rate your sleep quality in the past week?",
-    options: [
-      { value: "very_poor", label: "Very poor" },
-      { value: "poor", label: "Poor" },
-      { value: "fair", label: "Fair" },
-      { value: "good", label: "Good" },
-      { value: "excellent", label: "Excellent" },
-    ],
-  },
-  {
-    id: "stress",
-    category: "stress",
-    question: "How stressed have you felt in the past week?",
-    options: [
-      { value: "extremely_stressed", label: "Extremely stressed" },
-      { value: "very_stressed", label: "Very stressed" },
-      { value: "moderately_stressed", label: "Moderately stressed" },
-      { value: "slightly_stressed", label: "Slightly stressed" },
       { value: "not_stressed", label: "Not stressed at all" },
+      { value: "mildly_stressed", label: "Mildly stressed" },
+      { value: "moderately_stressed", label: "Moderately stressed" },
+      { value: "very_stressed", label: "Very stressed" },
+      { value: "extremely_stressed", label: "Extremely stressed" },
     ],
   },
   {
-    id: "concentration",
-    category: "general",
-    question: "How has your ability to concentrate been?",
+    id: "anxiety_frequency",
+    question: "Over the last 2 weeks, how often have you felt nervous, anxious, or on edge?",
+    type: "radio",
     options: [
-      { value: "very_poor", label: "Very poor" },
-      { value: "poor", label: "Poor" },
-      { value: "fair", label: "Fair" },
-      { value: "good", label: "Good" },
-      { value: "excellent", label: "Excellent" },
+      { value: "not_at_all", label: "Not at all" },
+      { value: "several_days", label: "Several days" },
+      { value: "more_than_half_days", label: "More than half the days" },
+      { value: "nearly_every_day", label: "Nearly every day" },
+    ],
+  },
+  {
+    id: "mood_changes",
+    question: "Have you experienced significant mood changes recently?",
+    type: "radio",
+    options: [
+      { value: "no_changes", label: "No significant changes" },
+      { value: "minor_changes", label: "Minor mood fluctuations" },
+      { value: "moderate_changes", label: "Moderate mood swings" },
+      { value: "major_changes", label: "Major mood changes" },
+      { value: "severe_changes", label: "Severe emotional instability" },
+    ],
+  },
+  {
+    id: "sleep_quality",
+    question: "How would you describe your sleep quality over the past week?",
+    type: "radio",
+    options: [
+      { value: "excellent", label: "Excellent - 8+ hours, restful" },
+      { value: "good", label: "Good - 7-8 hours, mostly restful" },
+      { value: "fair", label: "Fair - 6-7 hours, somewhat restful" },
+      { value: "poor", label: "Poor - 4-6 hours, not restful" },
+      { value: "very_poor", label: "Very poor - Less than 4 hours" },
     ],
   },
   {
     id: "academic_pressure",
-    category: "academic",
-    question: "How much academic pressure are you currently experiencing?",
+    question: "How much pressure do you feel from academic responsibilities?",
+    type: "radio",
     options: [
-      { value: "overwhelming", label: "Overwhelming" },
-      { value: "high", label: "High" },
-      { value: "moderate", label: "Moderate" },
-      { value: "low", label: "Low" },
-      { value: "none", label: "None" },
+      { value: "no_pressure", label: "No pressure" },
+      { value: "low_pressure", label: "Low pressure" },
+      { value: "moderate_pressure", label: "Moderate pressure" },
+      { value: "high_pressure", label: "High pressure" },
+      { value: "overwhelming", label: "Overwhelming pressure" },
     ],
   },
   {
     id: "social_connections",
-    category: "social",
-    question: "How satisfied are you with your social connections and relationships?",
+    question: "How satisfied are you with your social connections and support system?",
+    type: "radio",
     options: [
-      { value: "very_dissatisfied", label: "Very dissatisfied" },
-      { value: "dissatisfied", label: "Dissatisfied" },
-      { value: "neutral", label: "Neutral" },
-      { value: "satisfied", label: "Satisfied" },
       { value: "very_satisfied", label: "Very satisfied" },
+      { value: "satisfied", label: "Satisfied" },
+      { value: "neutral", label: "Neutral" },
+      { value: "dissatisfied", label: "Dissatisfied" },
+      { value: "very_dissatisfied", label: "Very dissatisfied" },
     ],
   },
   {
-    id: "additional_thoughts",
-    category: "general",
-    question: "Please share any additional thoughts about how you've been feeling lately (optional)",
-    options: [],
-    isTextArea: true,
+    id: "coping_strategies",
+    question: "What coping strategies do you currently use when feeling stressed or overwhelmed?",
+    type: "textarea",
+    placeholder: "Please describe the methods you use to manage stress, anxiety, or difficult emotions...",
+  },
+  {
+    id: "additional_concerns",
+    question: "Are there any other mental health concerns or thoughts you'd like to share?",
+    type: "textarea",
+    placeholder:
+      "Feel free to share any additional concerns, thoughts, or experiences that might be relevant to your mental wellness...",
   },
 ]
 
-// Helper function to calculate basic scores from responses
-function calculateScores(answers: Record<string, string>) {
-  const anxietyQuestions = ["anxiety", "worry"]
-  const depressionQuestions = ["interest", "hopeless"]
-  const stressQuestions = ["stress"]
-  const wellbeingQuestions = ["mood", "sleep", "concentration", "social_connections"]
-
-  const scoreMap = {
-    // Anxiety/Depression scoring (higher = worse)
-    nearly_every_day: 75,
-    more_than_half_days: 50,
-    several_days: 25,
-    not_at_all: 0,
-
-    // Stress scoring
-    extremely_stressed: 100,
-    very_stressed: 75,
-    moderately_stressed: 50,
-    slightly_stressed: 25,
-    not_stressed: 0,
-
-    // General wellbeing scoring (higher = better)
-    excellent: 100,
-    good: 75,
-    fair: 50,
-    poor: 25,
-    very_poor: 0,
-
-    // Social connections
-    very_satisfied: 100,
-    satisfied: 75,
-    neutral: 50,
-    dissatisfied: 25,
-    very_dissatisfied: 0,
-
-    // Academic pressure (higher = worse)
-    overwhelming: 100,
-    high: 75,
-    moderate: 50,
-    low: 25,
-    none: 0,
-  }
-
-  const calculateAverage = (questions: string[]) => {
-    const scores = questions
-      .map((q) => answers[q])
-      .filter(Boolean)
-      .map((answer) => scoreMap[answer as keyof typeof scoreMap] || 0)
-
-    return scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0
-  }
-
-  return {
-    anxiety_score: calculateAverage(anxietyQuestions),
-    depression_score: calculateAverage(depressionQuestions),
-    stress_score: calculateAverage(stressQuestions),
-    overall_wellbeing_score: calculateAverage(wellbeingQuestions),
-  }
-}
-
 export default function AssessmentPage() {
   const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
   const [currentQuestion, setCurrentQuestion] = useState(0)
   const [answers, setAnswers] = useState<Record<string, string>>({})
-  const [loading, setLoading] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -214,10 +118,6 @@ export default function AssessmentPage() {
         const currentUser = await getCurrentUser()
         if (!currentUser) {
           router.push("/auth/login")
-          return
-        }
-        if (currentUser.role !== "student") {
-          router.push("/dashboard")
           return
         }
         setUser(currentUser)
@@ -232,255 +132,303 @@ export default function AssessmentPage() {
     checkAuth()
   }, [router])
 
-  const handleAnswer = (value: string) => {
-    setAnswers((prev) => ({
-      ...prev,
-      [assessmentQuestions[currentQuestion].id]: value,
-    }))
+  const handleAnswer = (questionId: string, value: string) => {
+    setAnswers((prev) => ({ ...prev, [questionId]: value }))
   }
 
   const nextQuestion = () => {
-    if (currentQuestion < assessmentQuestions.length - 1) {
-      setCurrentQuestion((prev) => prev + 1)
+    if (currentQuestion < questions.length - 1) {
+      setCurrentQuestion(currentQuestion + 1)
     }
   }
 
   const prevQuestion = () => {
     if (currentQuestion > 0) {
-      setCurrentQuestion((prev) => prev - 1)
+      setCurrentQuestion(currentQuestion - 1)
     }
   }
 
-  const submitAssessment = async () => {
-    if (!user) return
+  const calculateRiskLevel = (answers: Record<string, string>) => {
+    let riskScore = 0
 
-    setSubmitting(true)
+    // Stress level scoring
+    if (answers.stress_level === "extremely_stressed") riskScore += 3
+    else if (answers.stress_level === "very_stressed") riskScore += 2
+    else if (answers.stress_level === "moderately_stressed") riskScore += 1
+
+    // Anxiety frequency scoring
+    if (answers.anxiety_frequency === "nearly_every_day") riskScore += 3
+    else if (answers.anxiety_frequency === "more_than_half_days") riskScore += 2
+    else if (answers.anxiety_frequency === "several_days") riskScore += 1
+
+    // Mood changes scoring
+    if (answers.mood_changes === "severe_changes") riskScore += 3
+    else if (answers.mood_changes === "major_changes") riskScore += 2
+    else if (answers.mood_changes === "moderate_changes") riskScore += 1
+
+    // Sleep quality scoring
+    if (answers.sleep_quality === "very_poor") riskScore += 3
+    else if (answers.sleep_quality === "poor") riskScore += 2
+    else if (answers.sleep_quality === "fair") riskScore += 1
+
+    // Academic pressure scoring
+    if (answers.academic_pressure === "overwhelming") riskScore += 3
+    else if (answers.academic_pressure === "high_pressure") riskScore += 2
+    else if (answers.academic_pressure === "moderate_pressure") riskScore += 1
+
+    // Social connections scoring (reverse scoring)
+    if (answers.social_connections === "very_dissatisfied") riskScore += 3
+    else if (answers.social_connections === "dissatisfied") riskScore += 2
+    else if (answers.social_connections === "neutral") riskScore += 1
+
+    // Determine risk level
+    if (riskScore >= 12) return "critical"
+    if (riskScore >= 8) return "high"
+    if (riskScore >= 4) return "moderate"
+    return "low"
+  }
+
+  const submitAssessment = async () => {
+    setIsSubmitting(true)
+    setError(null)
+
     try {
-      // First, try to get the student profile
-      let { data: student, error: studentError } = await supabase
+      // Get current user
+      const {
+        data: { user: authUser },
+        error: userError,
+      } = await supabase.auth.getUser()
+      if (userError || !authUser) {
+        throw new Error("You must be logged in to submit an assessment")
+      }
+
+      // Get student profile
+      const { data: student, error: studentError } = await supabase
         .from("students")
         .select("id")
-        .eq("user_id", user.id)
+        .eq("user_id", authUser.id)
         .single()
 
-      // If student profile doesn't exist, create it
       if (studentError || !student) {
-        console.log("Student profile not found, creating one...")
-        const { data: newStudent, error: createError } = await supabase
-          .from("students")
-          .insert({
-            user_id: user.id,
-          })
-          .select("id")
-          .single()
-
-        if (createError) {
-          console.error("Error creating student profile:", createError)
-          throw new Error("Failed to create student profile")
-        }
-
-        student = newStudent
+        throw new Error("Student profile not found. Please complete your profile first.")
       }
 
-      if (!student) {
-        throw new Error("Unable to create or find student profile")
-      }
+      const riskLevel = calculateRiskLevel(answers)
 
-      // Calculate basic scores
-      const scores = calculateScores(answers)
-
-      // Prepare basic assessment data with only core fields
-      const assessmentData: any = {
-        student_id: student.id,
-        responses: answers,
-        ...scores, // Include calculated scores
-        risk_level: "moderate", // Default risk level
-        ai_analysis: "Assessment completed successfully.",
-        recommendations: [
-          "Practice deep breathing exercises daily",
-          "Maintain a regular sleep schedule",
-          "Engage in physical activity you enjoy",
-          "Connect with friends and family regularly",
-          "Consider speaking with a counselor if needed",
-        ],
-      }
-
+      // Get AI analysis
+      let aiAnalysis = null
       try {
-        // Call AI API for enhanced analysis
         const aiResponse = await fetch("/api/analyze-assessment", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ answers }),
+          body: JSON.stringify({ answers, riskLevel }),
         })
 
         if (aiResponse.ok) {
-          const aiData = await aiResponse.json()
-          console.log("AI Analysis received:", aiData)
-
-          // Only add AI data if the columns exist (try to add them safely)
-          if (aiData.predicted_risk_level) {
-            assessmentData.risk_level = aiData.predicted_risk_level
-          }
-          if (aiData.sentiment_score !== undefined) {
-            assessmentData.sentiment_score = aiData.sentiment_score
-          }
-          if (aiData.sentiment_label) {
-            assessmentData.sentiment_label = aiData.sentiment_label
-          }
-          if (aiData.analysis) {
-            assessmentData.ai_analysis = aiData.analysis
-          }
-          if (aiData.recommendations) {
-            assessmentData.recommendations = aiData.recommendations
-          }
-
-          // Try to add predicted fields if they exist in the schema
-          try {
-            if (aiData.predicted_conditions) {
-              assessmentData.predicted_conditions = aiData.predicted_conditions
-            }
-            if (aiData.predicted_risk_level) {
-              assessmentData.predicted_risk_level = aiData.predicted_risk_level
-            }
-            if (aiData.predicted_sentiment) {
-              assessmentData.predicted_sentiment = aiData.predicted_sentiment
-            }
-          } catch (schemaError) {
-            console.log("Some predicted fields not available in schema, using fallbacks")
-          }
+          aiAnalysis = await aiResponse.json()
+        } else {
+          console.warn("AI analysis failed, proceeding without it")
         }
       } catch (aiError) {
-        console.log("AI analysis failed, proceeding with basic assessment:", aiError)
+        console.warn("AI analysis error:", aiError)
       }
 
-      // Save assessment with error handling for schema issues
-      try {
-        const { data: assessment, error } = await supabase.from("assessments").insert(assessmentData).select().single()
+      // Prepare assessment data with fallbacks
+      const assessmentData = {
+        student_id: student.id,
+        answers: answers,
+        risk_level: riskLevel,
+        score: Object.keys(answers).length, // Simple scoring based on completion
+        // AI analysis fields with fallbacks
+        ...(aiAnalysis && {
+          predicted_conditions: aiAnalysis.predicted_conditions || null,
+          predicted_risk_level: aiAnalysis.predicted_risk_level || riskLevel,
+          predicted_sentiment: aiAnalysis.predicted_sentiment || "neutral",
+          sentiment_score: aiAnalysis.sentiment_score || 50,
+          sentiment_label: aiAnalysis.sentiment_label || "neutral",
+          analysis: aiAnalysis.analysis || null,
+          recommendations: aiAnalysis.recommendations || null,
+          immediate_actions: aiAnalysis.immediate_actions || null,
+          professional_help_needed: aiAnalysis.professional_help_needed || false,
+          crisis_indicators: aiAnalysis.crisis_indicators || false,
+        }),
+      }
 
-        if (error) throw error
-        router.push(`/results/${assessment.id}`)
-      } catch (insertError: any) {
-        // If insert fails due to schema issues, try with minimal data
-        console.log("Full insert failed, trying with minimal data:", insertError)
+      // Try to insert with all fields first
+      let { data: assessment, error: insertError } = await supabase
+        .from("assessments")
+        .insert(assessmentData)
+        .select()
+        .single()
+
+      // If insertion fails due to missing columns, try with minimal data
+      if (insertError && insertError.message.includes("column")) {
+        console.warn("Full insert failed, trying with minimal data:", insertError.message)
 
         const minimalData = {
           student_id: student.id,
-          responses: answers,
-          ...scores,
-          risk_level: "moderate",
-          ai_analysis:
-            "Assessment completed. Please run the database migration script to enable full AI analysis features.",
+          answers: answers,
+          risk_level: riskLevel,
+          score: Object.keys(answers).length,
         }
 
-        const { data: assessment, error: minimalError } = await supabase
+        const { data: minimalAssessment, error: minimalError } = await supabase
           .from("assessments")
           .insert(minimalData)
           .select()
           .single()
 
-        if (minimalError) throw minimalError
-        router.push(`/results/${assessment.id}`)
+        if (minimalError) {
+          throw minimalError
+        }
+
+        assessment = minimalAssessment
+
+        // Show warning about missing AI analysis
+        setError(
+          "Assessment saved successfully, but AI analysis features are not available due to database configuration. Please contact support.",
+        )
+      } else if (insertError) {
+        throw insertError
       }
-    } catch (error: any) {
+
+      setSuccess(true)
+
+      // Redirect to results after a short delay
+      setTimeout(() => {
+        router.push(`/results/${assessment.id}`)
+      }, 2000)
+    } catch (error) {
       console.error("Error submitting assessment:", error)
-      alert(`Error submitting assessment: ${error.message}. Please try again.`)
+      setError(error instanceof Error ? error.message : "Failed to submit assessment. Please try again.")
     } finally {
-      setSubmitting(false)
+      setIsSubmitting(false)
     }
   }
 
+  // Show loading state while checking authentication
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <Brain className="h-8 w-8 animate-spin mx-auto mb-4 text-purple-600" />
-          <p>Loading...</p>
+          <p className="text-gray-600">Loading assessment...</p>
         </div>
       </div>
     )
   }
 
-  if (!user) return null
+  // If no user after loading, don't render anything (redirect will happen)
+  if (!user) {
+    return null
+  }
 
-  const progress = ((currentQuestion + 1) / assessmentQuestions.length) * 100
-  const currentQ = assessmentQuestions[currentQuestion]
-  const isLastQuestion = currentQuestion === assessmentQuestions.length - 1
-  const canProceed = answers[currentQ.id] || currentQ.isTextArea
+  const progress = ((currentQuestion + 1) / questions.length) * 100
+  const currentQ = questions[currentQuestion]
+  const isLastQuestion = currentQuestion === questions.length - 1
+  const canProceed = answers[currentQ.id]
+
+  if (success) {
+    return (
+      <TopNavLayout user={user}>
+        <div className="container mx-auto px-4 py-8">
+          <Card className="max-w-2xl mx-auto">
+            <CardContent className="p-8 text-center">
+              <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-green-700 mb-2">Assessment Completed!</h2>
+              <p className="text-gray-600 mb-4">
+                Thank you for completing your mental health assessment. You'll be redirected to your results shortly.
+              </p>
+              <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
+            </CardContent>
+          </Card>
+        </div>
+      </TopNavLayout>
+    )
+  }
 
   return (
     <TopNavLayout user={user}>
-      <div className="max-w-2xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Mental Health Assessment</h1>
-          <p className="text-gray-600">
-            Please answer the following questions honestly. This assessment will help us understand your current mental
-            wellness and provide personalized support.
-          </p>
-        </div>
-
-        {/* Progress */}
-        <div className="mb-8">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-sm text-gray-600">
-              Question {currentQuestion + 1} of {assessmentQuestions.length}
-            </span>
-            <span className="text-sm text-gray-600">{Math.round(progress)}% Complete</span>
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-2xl mx-auto">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Mental Health Assessment</h1>
+            <p className="text-gray-600 mb-4">
+              This confidential assessment will help us understand your current mental wellness and provide personalized
+              recommendations.
+            </p>
+            <Progress value={progress} className="w-full" />
+            <p className="text-sm text-gray-500 mt-2">
+              Question {currentQuestion + 1} of {questions.length}
+            </p>
           </div>
-          <Progress value={progress} className="h-2" />
-        </div>
 
-        {/* Question Card */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="text-xl">{currentQ.question}</CardTitle>
-            <CardDescription>
-              {currentQ.isTextArea
-                ? "Optional - share your thoughts"
-                : "Select the option that best describes your experience"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {currentQ.isTextArea ? (
-              <Textarea
-                value={answers[currentQ.id] || ""}
-                onChange={(e) => handleAnswer(e.target.value)}
-                placeholder="Share your thoughts here..."
-                rows={4}
-                className="w-full"
-              />
-            ) : (
-              <RadioGroup value={answers[currentQ.id] || ""} onValueChange={handleAnswer} className="space-y-4">
-                {currentQ.options.map((option) => (
-                  <div key={option.value} className="flex items-center space-x-2">
-                    <RadioGroupItem value={option.value} id={option.value} />
-                    <Label htmlFor={option.value} className="flex-1 cursor-pointer">
-                      {option.label}
-                    </Label>
-                  </div>
-                ))}
-              </RadioGroup>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Navigation */}
-        <div className="flex justify-between">
-          <Button variant="outline" onClick={prevQuestion} disabled={currentQuestion === 0}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Previous
-          </Button>
-
-          {isLastQuestion ? (
-            <Button onClick={submitAssessment} disabled={submitting} className="bg-purple-600 hover:bg-purple-700">
-              {submitting ? "Analyzing..." : "Complete Assessment"}
-            </Button>
-          ) : (
-            <Button onClick={nextQuestion} disabled={!canProceed} className="bg-purple-600 hover:bg-purple-700">
-              Next
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
+          {error && (
+            <Alert className="mb-6 border-red-200 bg-red-50">
+              <AlertCircle className="h-4 w-4 text-red-600" />
+              <AlertDescription className="text-red-700">{error}</AlertDescription>
+            </Alert>
           )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-xl">{currentQ.question}</CardTitle>
+              {currentQ.type === "textarea" && (
+                <CardDescription>
+                  Please provide as much detail as you're comfortable sharing. Your responses are confidential.
+                </CardDescription>
+              )}
+            </CardHeader>
+            <CardContent>
+              {currentQ.type === "radio" && (
+                <RadioGroup
+                  value={answers[currentQ.id] || ""}
+                  onValueChange={(value) => handleAnswer(currentQ.id, value)}
+                >
+                  {currentQ.options?.map((option) => (
+                    <div key={option.value} className="flex items-center space-x-2">
+                      <RadioGroupItem value={option.value} id={option.value} />
+                      <Label htmlFor={option.value} className="flex-1 cursor-pointer">
+                        {option.label}
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              )}
+
+              {currentQ.type === "textarea" && (
+                <Textarea
+                  value={answers[currentQ.id] || ""}
+                  onChange={(e) => handleAnswer(currentQ.id, e.target.value)}
+                  placeholder={currentQ.placeholder}
+                  className="min-h-[120px]"
+                />
+              )}
+
+              <div className="flex justify-between mt-8">
+                <Button variant="outline" onClick={prevQuestion} disabled={currentQuestion === 0}>
+                  Previous
+                </Button>
+
+                {isLastQuestion ? (
+                  <Button onClick={submitAssessment} disabled={!canProceed || isSubmitting} className="min-w-[120px]">
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      "Submit Assessment"
+                    )}
+                  </Button>
+                ) : (
+                  <Button onClick={nextQuestion} disabled={!canProceed}>
+                    Next
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </TopNavLayout>

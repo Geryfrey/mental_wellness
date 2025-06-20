@@ -5,21 +5,23 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { TopNavLayout } from "@/components/layout/top-nav-layout"
 import { getCurrentUser } from "@/lib/auth"
 import { supabase } from "@/lib/supabase/client"
 import type { User, Assessment } from "@/lib/types"
-import { Brain, Calendar, AlertCircle, CheckCircle, LineChart } from "lucide-react"
+import { Brain, Calendar, AlertCircle, CheckCircle, Eye, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 
-export default function ResultsHistoryPage() {
+export default function ResultsPage() {
   const [user, setUser] = useState<User | null>(null)
   const [assessments, setAssessments] = useState<Assessment[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
-    const loadData = async () => {
+    const loadAssessments = async () => {
       try {
         const currentUser = await getCurrentUser()
         if (!currentUser) {
@@ -33,27 +35,37 @@ export default function ResultsHistoryPage() {
         setUser(currentUser)
 
         // Get student ID
-        const { data: student } = await supabase.from("students").select("id").eq("user_id", currentUser.id).single()
+        const { data: student, error: studentError } = await supabase
+          .from("students")
+          .select("id")
+          .eq("user_id", currentUser.id)
+          .single()
 
-        if (!student) throw new Error("Student profile not found")
+        if (studentError || !student) {
+          throw new Error("Student profile not found. Please complete your profile setup.")
+        }
 
         // Get assessments
-        const { data: assessmentData, error } = await supabase
+        const { data: assessmentData, error: assessmentError } = await supabase
           .from("assessments")
           .select("*")
           .eq("student_id", student.id)
           .order("created_at", { ascending: false })
 
-        if (error) throw error
+        if (assessmentError) {
+          throw new Error(`Failed to load assessments: ${assessmentError.message}`)
+        }
+
         setAssessments(assessmentData || [])
-      } catch (error) {
-        console.error("Error loading data:", error)
+      } catch (error: any) {
+        console.error("Error loading assessments:", error)
+        setError(error.message || "Failed to load assessment data")
       } finally {
         setLoading(false)
       }
     }
 
-    loadData()
+    loadAssessments()
   }, [router])
 
   if (loading) {
@@ -61,7 +73,7 @@ export default function ResultsHistoryPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <Brain className="h-8 w-8 animate-spin mx-auto mb-4 text-purple-600" />
-          <p>Loading results...</p>
+          <p>Loading your assessment results...</p>
         </div>
       </div>
     )
@@ -91,9 +103,9 @@ export default function ResultsHistoryPage() {
       case "moderate":
         return <AlertCircle className="h-4 w-4" />
       case "high":
-        return <AlertCircle className="h-4 w-4" />
+        return <AlertTriangle className="h-4 w-4" />
       case "critical":
-        return <AlertCircle className="h-4 w-4" />
+        return <AlertTriangle className="h-4 w-4" />
       default:
         return <AlertCircle className="h-4 w-4" />
     }
@@ -104,99 +116,152 @@ export default function ResultsHistoryPage() {
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Assessment History</h1>
-          <p className="text-gray-600">View your past mental health assessments and track your progress over time</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Assessment Results</h1>
+          <p className="text-gray-600">View your mental health assessment history and detailed results.</p>
         </div>
 
-        {/* Wellness Trend */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <LineChart className="h-5 w-5 text-purple-600" />
-              Your Wellness Journey
-            </CardTitle>
-            <CardDescription>Track your mental wellness indicators over time</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {assessments.length > 0 ? (
-              <div className="h-64 flex items-center justify-center">
-                <p className="text-gray-500">Wellness trend visualization would appear here</p>
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <p className="text-gray-500 mb-4">You haven't taken any assessments yet</p>
-                <Link href="/assessment">
-                  <Button>Take Your First Assessment</Button>
-                </Link>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {/* Error Alert */}
+        {error && (
+          <Alert className="mb-6 border-red-200 bg-red-50">
+            <AlertTriangle className="h-4 w-4 text-red-600" />
+            <AlertTitle className="text-red-800">Error Loading Results</AlertTitle>
+            <AlertDescription className="text-red-700">{error}</AlertDescription>
+          </Alert>
+        )}
 
-        {/* Assessment History */}
-        {assessments.length > 0 && (
+        {/* No Assessments */}
+        {!error && assessments.length === 0 && (
           <Card>
-            <CardHeader>
-              <CardTitle>Past Assessments</CardTitle>
-              <CardDescription>Your previous mental health assessments</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {assessments.map((assessment) => (
-                  <Link key={assessment.id} href={`/results/${assessment.id}`} className="block">
-                    <div className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-gray-500" />
-                          <span className="text-sm text-gray-600">
-                            {new Date(assessment.created_at).toLocaleDateString("en-US", {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            })}
-                          </span>
-                        </div>
-                        <Badge className={`${getRiskLevelColor(assessment.risk_level)} flex items-center gap-1`}>
-                          {getRiskLevelIcon(assessment.risk_level)}
-                          {assessment.risk_level?.toUpperCase()}
-                        </Badge>
-                      </div>
-
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-                        {assessment.anxiety_score !== undefined && (
-                          <div>
-                            <div className="text-xs text-gray-500">Anxiety</div>
-                            <div className="font-medium">{assessment.anxiety_score}/100</div>
-                          </div>
-                        )}
-
-                        {assessment.depression_score !== undefined && (
-                          <div>
-                            <div className="text-xs text-gray-500">Depression</div>
-                            <div className="font-medium">{assessment.depression_score}/100</div>
-                          </div>
-                        )}
-
-                        {assessment.stress_score !== undefined && (
-                          <div>
-                            <div className="text-xs text-gray-500">Stress</div>
-                            <div className="font-medium">{assessment.stress_score}/100</div>
-                          </div>
-                        )}
-
-                        {assessment.overall_wellbeing_score !== undefined && (
-                          <div>
-                            <div className="text-xs text-gray-500">Wellbeing</div>
-                            <div className="font-medium">{assessment.overall_wellbeing_score}/100</div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
+            <CardContent className="text-center py-12">
+              <Brain className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Assessments Yet</h3>
+              <p className="text-gray-600 mb-6">
+                Take your first mental health assessment to get personalized insights.
+              </p>
+              <Link href="/assessment">
+                <Button className="bg-purple-600 hover:bg-purple-700">Take Assessment</Button>
+              </Link>
             </CardContent>
           </Card>
+        )}
+
+        {/* Assessment List */}
+        {!error && assessments.length > 0 && (
+          <div className="space-y-6">
+            {assessments.map((assessment) => (
+              <Card key={assessment.id} className="hover:shadow-md transition-shadow">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Calendar className="h-5 w-5 text-purple-600" />
+                        Assessment Results
+                      </CardTitle>
+                      <CardDescription>
+                        {new Date(assessment.created_at).toLocaleDateString("en-US", {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </CardDescription>
+                    </div>
+                    <Badge
+                      className={`${getRiskLevelColor(assessment.predicted_risk_level || assessment.risk_level)} flex items-center gap-1`}
+                    >
+                      {getRiskLevelIcon(assessment.predicted_risk_level || assessment.risk_level)}
+                      {(assessment.predicted_risk_level || assessment.risk_level || "Unknown").charAt(0).toUpperCase() +
+                        (assessment.predicted_risk_level || assessment.risk_level || "unknown").slice(1)}{" "}
+                      Risk
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div>
+                      <div className="text-sm text-gray-600">Stress Level</div>
+                      <div className="text-lg font-semibold">
+                        {assessment.stress_score ? `${assessment.stress_score}/100` : "N/A"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600">Anxiety Level</div>
+                      <div className="text-lg font-semibold">
+                        {assessment.anxiety_score ? `${assessment.anxiety_score}/100` : "N/A"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600">Sentiment</div>
+                      <div className="text-lg font-semibold capitalize">
+                        {assessment.sentiment_label ? assessment.sentiment_label.replace("_", " ") : "N/A"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600">Conditions</div>
+                      <div className="text-lg font-semibold">
+                        {assessment.predicted_conditions ? assessment.predicted_conditions.length : 0}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* AI Analysis Preview */}
+                  {assessment.ai_analysis && (
+                    <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                      <div className="text-sm text-gray-700 line-clamp-2">
+                        {assessment.ai_analysis.length > 150
+                          ? `${assessment.ai_analysis.substring(0, 150)}...`
+                          : assessment.ai_analysis}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Professional Help Alert */}
+                  {assessment.professional_help_needed && (
+                    <Alert className="mb-4 border-orange-200 bg-orange-50">
+                      <AlertTriangle className="h-4 w-4 text-orange-600" />
+                      <AlertDescription className="text-orange-700">
+                        Professional support recommended based on this assessment.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {/* Crisis Alert */}
+                  {assessment.crisis_indicators && (
+                    <Alert className="mb-4 border-red-200 bg-red-50">
+                      <AlertTriangle className="h-4 w-4 text-red-600" />
+                      <AlertDescription className="text-red-700">
+                        This assessment indicated crisis-level concerns. Please seek immediate support.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="flex justify-between items-center">
+                    <div className="text-sm text-gray-600">
+                      {assessment.recommendations
+                        ? `${assessment.recommendations.length} recommendations`
+                        : "No recommendations"}
+                    </div>
+                    <Link href={`/results/${assessment.id}`}>
+                      <Button variant="outline" size="sm">
+                        <Eye className="h-4 w-4 mr-2" />
+                        View Details
+                      </Button>
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* Take New Assessment Button */}
+        {!error && assessments.length > 0 && (
+          <div className="mt-8 text-center">
+            <Link href="/assessment">
+              <Button className="bg-purple-600 hover:bg-purple-700">Take New Assessment</Button>
+            </Link>
+          </div>
         )}
       </div>
     </TopNavLayout>

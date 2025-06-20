@@ -12,7 +12,7 @@ import { signOut } from "@/lib/auth"
 import type { User } from "@/lib/types"
 
 interface TopNavLayoutProps {
-  user: User
+  user?: User // now optional
   children: React.ReactNode
 }
 
@@ -47,8 +47,16 @@ export function TopNavLayout({ user, children }: TopNavLayoutProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const pathname = usePathname()
 
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <span className="text-gray-500">Loading dashboard…</span>
+      </div>
+    )
+  }
+
   const getNavItems = () => {
-    switch (user.role) {
+    switch (user?.role) {
       case "health_professional":
         return professionalNavItems
       case "admin":
@@ -79,8 +87,8 @@ export function TopNavLayout({ user, children }: TopNavLayoutProps) {
                 <span className="text-xl font-bold text-gray-900">SWAP</span>
               </div>
               <div className="text-sm text-gray-600">
-                <span className="font-medium">{user.full_name}</span>
-                <span className="ml-2 capitalize text-purple-600">{user.role.replace("_", " ")}</span>
+                <span className="font-medium">{user?.full_name ?? "Loading…"}</span>
+                <span className="ml-2 capitalize text-purple-600">{(user?.role ?? "student").replace("_", " ")}</span>
               </div>
             </div>
 
