@@ -1,312 +1,139 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Progress } from "@/components/ui/progress"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle, CheckCircle2, Loader2, Brain } from "lucide-react"
-import { TopNavLayout } from "@/components/layout/top-nav-layout"
-import { supabase } from "@/lib/supabase/client"
-import { getCurrentUser } from "@/lib/auth"
-import { useRouter } from "next/navigation"
-import type { User } from "@/lib/types"
-
-const questions = [
-  {
-    id: "stress_level",
-    question: "How would you rate your current stress level?",
-    type: "radio",
-    options: [
-      { value: "not_stressed", label: "Not stressed at all" },
-      { value: "mildly_stressed", label: "Mildly stressed" },
-      { value: "moderately_stressed", label: "Moderately stressed" },
-      { value: "very_stressed", label: "Very stressed" },
-      { value: "extremely_stressed", label: "Extremely stressed" },
-    ],
-  },
-  {
-    id: "anxiety_frequency",
-    question: "Over the last 2 weeks, how often have you felt nervous, anxious, or on edge?",
-    type: "radio",
-    options: [
-      { value: "not_at_all", label: "Not at all" },
-      { value: "several_days", label: "Several days" },
-      { value: "more_than_half_days", label: "More than half the days" },
-      { value: "nearly_every_day", label: "Nearly every day" },
-    ],
-  },
-  {
-    id: "mood_changes",
-    question: "Have you experienced significant mood changes recently?",
-    type: "radio",
-    options: [
-      { value: "no_changes", label: "No significant changes" },
-      { value: "minor_changes", label: "Minor mood fluctuations" },
-      { value: "moderate_changes", label: "Moderate mood swings" },
-      { value: "major_changes", label: "Major mood changes" },
-      { value: "severe_changes", label: "Severe emotional instability" },
-    ],
-  },
-  {
-    id: "sleep_quality",
-    question: "How would you describe your sleep quality over the past week?",
-    type: "radio",
-    options: [
-      { value: "excellent", label: "Excellent - 8+ hours, restful" },
-      { value: "good", label: "Good - 7-8 hours, mostly restful" },
-      { value: "fair", label: "Fair - 6-7 hours, somewhat restful" },
-      { value: "poor", label: "Poor - 4-6 hours, not restful" },
-      { value: "very_poor", label: "Very poor - Less than 4 hours" },
-    ],
-  },
-  {
-    id: "academic_pressure",
-    question: "How much pressure do you feel from academic responsibilities?",
-    type: "radio",
-    options: [
-      { value: "no_pressure", label: "No pressure" },
-      { value: "low_pressure", label: "Low pressure" },
-      { value: "moderate_pressure", label: "Moderate pressure" },
-      { value: "high_pressure", label: "High pressure" },
-      { value: "overwhelming", label: "Overwhelming pressure" },
-    ],
-  },
-  {
-    id: "social_connections",
-    question: "How satisfied are you with your social connections and support system?",
-    type: "radio",
-    options: [
-      { value: "very_satisfied", label: "Very satisfied" },
-      { value: "satisfied", label: "Satisfied" },
-      { value: "neutral", label: "Neutral" },
-      { value: "dissatisfied", label: "Dissatisfied" },
-      { value: "very_dissatisfied", label: "Very dissatisfied" },
-    ],
-  },
-  {
-    id: "coping_strategies",
-    question: "What coping strategies do you currently use when feeling stressed or overwhelmed?",
-    type: "textarea",
-    placeholder: "Please describe the methods you use to manage stress, anxiety, or difficult emotions...",
-  },
-  {
-    id: "additional_concerns",
-    question: "Are there any other mental health concerns or thoughts you'd like to share?",
-    type: "textarea",
-    placeholder:
-      "Feel free to share any additional concerns, thoughts, or experiences that might be relevant to your mental wellness...",
-  },
-]
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  Brain,
+  BookOpen,
+} from "lucide-react";
+import { TopNavLayout } from "@/components/layout/top-nav-layout";
+import { getCurrentUser } from "@/lib/auth";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase/client";
+import type { User, Resource } from "@/lib/types";
+import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 
 export default function AssessmentPage() {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [currentQuestion, setCurrentQuestion] = useState(0)
-  const [answers, setAnswers] = useState<Record<string, string>>({})
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
-  const router = useRouter()
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [feeling, setFeeling] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [sentiment, setSentiment] = useState<null | {
+    sentiment: string;
+    score: number;
+    riskLevel?: string;
+    predicted_tags?: string[];
+    requires_mental_health_professional?: boolean;
+  }>(null);
+  const [resources, setResources] = useState<Resource[]>([]);
+  const router = useRouter();
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const currentUser = await getCurrentUser()
+        const currentUser = await getCurrentUser();
         if (!currentUser) {
-          router.push("/auth/login")
-          return
+          router.push("/auth/login");
+          return;
         }
-        setUser(currentUser)
+        setUser(currentUser);
       } catch (error) {
-        console.error("Auth error:", error)
-        router.push("/auth/login")
+        router.push("/auth/login");
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
-
-    checkAuth()
-  }, [router])
-
-  const handleAnswer = (questionId: string, value: string) => {
-    setAnswers((prev) => ({ ...prev, [questionId]: value }))
-  }
-
-  const nextQuestion = () => {
-    if (currentQuestion < questions.length - 1) {
-      setCurrentQuestion(currentQuestion + 1)
-    }
-  }
-
-  const prevQuestion = () => {
-    if (currentQuestion > 0) {
-      setCurrentQuestion(currentQuestion - 1)
-    }
-  }
-
-  const calculateRiskLevel = (answers: Record<string, string>) => {
-    let riskScore = 0
-
-    // Stress level scoring
-    if (answers.stress_level === "extremely_stressed") riskScore += 3
-    else if (answers.stress_level === "very_stressed") riskScore += 2
-    else if (answers.stress_level === "moderately_stressed") riskScore += 1
-
-    // Anxiety frequency scoring
-    if (answers.anxiety_frequency === "nearly_every_day") riskScore += 3
-    else if (answers.anxiety_frequency === "more_than_half_days") riskScore += 2
-    else if (answers.anxiety_frequency === "several_days") riskScore += 1
-
-    // Mood changes scoring
-    if (answers.mood_changes === "severe_changes") riskScore += 3
-    else if (answers.mood_changes === "major_changes") riskScore += 2
-    else if (answers.mood_changes === "moderate_changes") riskScore += 1
-
-    // Sleep quality scoring
-    if (answers.sleep_quality === "very_poor") riskScore += 3
-    else if (answers.sleep_quality === "poor") riskScore += 2
-    else if (answers.sleep_quality === "fair") riskScore += 1
-
-    // Academic pressure scoring
-    if (answers.academic_pressure === "overwhelming") riskScore += 3
-    else if (answers.academic_pressure === "high_pressure") riskScore += 2
-    else if (answers.academic_pressure === "moderate_pressure") riskScore += 1
-
-    // Social connections scoring (reverse scoring)
-    if (answers.social_connections === "very_dissatisfied") riskScore += 3
-    else if (answers.social_connections === "dissatisfied") riskScore += 2
-    else if (answers.social_connections === "neutral") riskScore += 1
-
-    // Determine risk level
-    if (riskScore >= 12) return "critical"
-    if (riskScore >= 8) return "high"
-    if (riskScore >= 4) return "moderate"
-    return "low"
-  }
+    };
+    checkAuth();
+  }, [router]);
 
   const submitAssessment = async () => {
-    setIsSubmitting(true)
-    setError(null)
-
+    setIsSubmitting(true);
+    setError(null);
+    setSentiment(null);
     try {
-      // Get current user
-      const {
-        data: { user: authUser },
-        error: userError,
-      } = await supabase.auth.getUser()
-      if (userError || !authUser) {
-        throw new Error("You must be logged in to submit an assessment")
-      }
+      const res = await fetch("/api/analyze-assessment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feeling }),
+      });
+      if (!res.ok) throw new Error("Failed to analyze sentiment.");
+      const data = await res.json();
+      setSentiment(data);
+      setSuccess(true);
 
-      // Get student profile
-      const { data: student, error: studentError } = await supabase
-        .from("students")
-        .select("id")
-        .eq("user_id", authUser.id)
-        .single()
-
-      if (studentError || !student) {
-        throw new Error("Student profile not found. Please complete your profile first.")
-      }
-
-      const riskLevel = calculateRiskLevel(answers)
-
-      // Get AI analysis
-      let aiAnalysis = null
-      try {
-        const aiResponse = await fetch("/api/analyze-assessment", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ answers, riskLevel }),
-        })
-
-        if (aiResponse.ok) {
-          aiAnalysis = await aiResponse.json()
-        } else {
-          console.warn("AI analysis failed, proceeding without it")
+      // Save assessment result to database as an assessment with well_score
+      if (user) {
+        // Get student_id for the user
+        const { data: student, error: studentError } = await supabase
+          .from("students")
+          .select("id")
+          .eq("user_id", user.id)
+          .single();
+        if (studentError || !student) {
+          throw new Error(
+            "Student profile not found. Please complete your profile setup."
+          );
         }
-      } catch (aiError) {
-        console.warn("AI analysis error:", aiError)
-      }
-
-      // Prepare assessment data with fallbacks
-      const assessmentData = {
-        student_id: student.id,
-        answers: answers,
-        risk_level: riskLevel,
-        score: Object.keys(answers).length, // Simple scoring based on completion
-        // AI analysis fields with fallbacks
-        ...(aiAnalysis && {
-          predicted_conditions: aiAnalysis.predicted_conditions || null,
-          predicted_risk_level: aiAnalysis.predicted_risk_level || riskLevel,
-          predicted_sentiment: aiAnalysis.predicted_sentiment || "neutral",
-          sentiment_score: aiAnalysis.sentiment_score || 50,
-          sentiment_label: aiAnalysis.sentiment_label || "neutral",
-          analysis: aiAnalysis.analysis || null,
-          recommendations: aiAnalysis.recommendations || null,
-          immediate_actions: aiAnalysis.immediate_actions || null,
-          professional_help_needed: aiAnalysis.professional_help_needed || false,
-          crisis_indicators: aiAnalysis.crisis_indicators || false,
-        }),
-      }
-
-      // Try to insert with all fields first
-      let { data: assessment, error: insertError } = await supabase
-        .from("assessments")
-        .insert(assessmentData)
-        .select()
-        .single()
-
-      // If insertion fails due to missing columns, try with minimal data
-      if (insertError && insertError.message.includes("column")) {
-        console.warn("Full insert failed, trying with minimal data:", insertError.message)
-
-        const minimalData = {
-          student_id: student.id,
-          answers: answers,
-          risk_level: riskLevel,
-          score: Object.keys(answers).length,
-        }
-
-        const { data: minimalAssessment, error: minimalError } = await supabase
+        // Insert assessment
+        const { error: insertError } = await supabase
           .from("assessments")
-          .insert(minimalData)
-          .select()
-          .single()
-
-        if (minimalError) {
-          throw minimalError
+          .insert([
+            {
+              student_id: student.id,
+              responses: { feeling },
+              wellness_score: data.score, // use wellness_score
+              requires_mental_health_professional:
+                data.requires_mental_health_professional || null,
+              risk_level: data.riskLevel || null,
+              // Add other fields as needed
+            },
+          ]);
+        if (insertError) {
+          console.log(insertError);
+          throw new Error("Failed to save assessment result.");
         }
-
-        assessment = minimalAssessment
-
-        // Show warning about missing AI analysis
-        setError(
-          "Assessment saved successfully, but AI analysis features are not available due to database configuration. Please contact support.",
-        )
-      } else if (insertError) {
-        throw insertError
       }
-
-      setSuccess(true)
-
-      // Redirect to results after a short delay
-      setTimeout(() => {
-        router.push(`/results/${assessment.id}`)
-      }, 2000)
-    } catch (error) {
-      console.error("Error submitting assessment:", error)
-      setError(error instanceof Error ? error.message : "Failed to submit assessment. Please try again.")
+    } catch (err: any) {
+      setError(err.message || "Submission failed.");
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
-  // Show loading state while checking authentication
+  useEffect(() => {
+    // Fetch resources when sentiment.predicted_tags changes
+    const fetchResources = async () => {
+      if (
+        sentiment &&
+        sentiment.predicted_tags &&
+        sentiment.predicted_tags.length > 0
+      ) {
+        const { data, error } = await supabase
+          .from("resources")
+          .select(
+            "id, title, description, url, resource_type, category, tags, is_featured, created_at"
+          )
+          .overlaps("tags", sentiment.predicted_tags);
+        if (!error && data) {
+          setResources(data);
+        } else {
+          setResources([]);
+        }
+      } else {
+        setResources([]);
+      }
+    };
+    fetchResources();
+  }, [sentiment]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -315,122 +142,257 @@ export default function AssessmentPage() {
           <p className="text-gray-600">Loading assessment...</p>
         </div>
       </div>
-    )
+    );
   }
 
-  // If no user after loading, don't render anything (redirect will happen)
-  if (!user) {
-    return null
-  }
-
-  const progress = ((currentQuestion + 1) / questions.length) * 100
-  const currentQ = questions[currentQuestion]
-  const isLastQuestion = currentQuestion === questions.length - 1
-  const canProceed = answers[currentQ.id]
-
-  if (success) {
-    return (
-      <TopNavLayout user={user}>
-        <div className="container mx-auto px-4 py-8">
-          <Card className="max-w-2xl mx-auto">
-            <CardContent className="p-8 text-center">
-              <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-green-700 mb-2">Assessment Completed!</h2>
-              <p className="text-gray-600 mb-4">
-                Thank you for completing your mental health assessment. You'll be redirected to your results shortly.
-              </p>
-              <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
-            </CardContent>
-          </Card>
-        </div>
-      </TopNavLayout>
-    )
-  }
+  if (!user) return null;
 
   return (
     <TopNavLayout user={user}>
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Mental Health Assessment</h1>
-            <p className="text-gray-600 mb-4">
-              This confidential assessment will help us understand your current mental wellness and provide personalized
-              recommendations.
-            </p>
-            <Progress value={progress} className="w-full" />
-            <p className="text-sm text-gray-500 mt-2">
-              Question {currentQuestion + 1} of {questions.length}
-            </p>
-          </div>
-
-          {error && (
-            <Alert className="mb-6 border-red-200 bg-red-50">
-              <AlertCircle className="h-4 w-4 text-red-600" />
-              <AlertDescription className="text-red-700">{error}</AlertDescription>
-            </Alert>
-          )}
-
           <Card>
             <CardHeader>
-              <CardTitle className="text-xl">{currentQ.question}</CardTitle>
-              {currentQ.type === "textarea" && (
-                <CardDescription>
-                  Please provide as much detail as you're comfortable sharing. Your responses are confidential.
-                </CardDescription>
-              )}
+              <CardTitle className="text-xl">
+                How are you feeling today?
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              {currentQ.type === "radio" && (
-                <RadioGroup
-                  value={answers[currentQ.id] || ""}
-                  onValueChange={(value) => handleAnswer(currentQ.id, value)}
+              <Textarea
+                value={feeling}
+                onChange={(e) => setFeeling(e.target.value)}
+                placeholder="Describe your feelings..."
+                className="min-h-[120px]"
+                disabled={isSubmitting || success}
+              />
+              <div className="flex justify-end mt-8">
+                <Button
+                  onClick={submitAssessment}
+                  disabled={!feeling.trim() || isSubmitting || success}
+                  className="min-w-[120px]"
                 >
-                  {currentQ.options?.map((option) => (
-                    <div key={option.value} className="flex items-center space-x-2">
-                      <RadioGroupItem value={option.value} id={option.value} />
-                      <Label htmlFor={option.value} className="flex-1 cursor-pointer">
-                        {option.label}
-                      </Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              )}
-
-              {currentQ.type === "textarea" && (
-                <Textarea
-                  value={answers[currentQ.id] || ""}
-                  onChange={(e) => handleAnswer(currentQ.id, e.target.value)}
-                  placeholder={currentQ.placeholder}
-                  className="min-h-[120px]"
-                />
-              )}
-
-              <div className="flex justify-between mt-8">
-                <Button variant="outline" onClick={prevQuestion} disabled={currentQuestion === 0}>
-                  Previous
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    "Submit"
+                  )}
                 </Button>
-
-                {isLastQuestion ? (
-                  <Button onClick={submitAssessment} disabled={!canProceed || isSubmitting} className="min-w-[120px]">
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Submitting...
-                      </>
-                    ) : (
-                      "Submit Assessment"
-                    )}
-                  </Button>
-                ) : (
-                  <Button onClick={nextQuestion} disabled={!canProceed}>
-                    Next
-                  </Button>
-                )}
               </div>
+              {error && (
+                <Alert className="mt-6 border-red-200 bg-red-50">
+                  <AlertCircle className="h-4 w-4 text-red-600" />
+                  <AlertDescription className="text-red-700">
+                    {error}
+                  </AlertDescription>
+                </Alert>
+              )}
+              {success && sentiment && (
+                <div className="mt-8 flex flex-col items-center gap-8">
+                  <div className="w-full max-w-xl bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+                    <div className="flex items-center gap-4 mb-4">
+                      <CheckCircle2 className="h-10 w-10 text-green-500" />
+                      <div>
+                        <h2 className="text-2xl font-bold text-green-700 mb-1">
+                          Assessment Completed!
+                        </h2>
+                        <p className="text-gray-500 text-sm">
+                          Your personalized results and recommendations are
+                          below.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col md:flex-row gap-6 items-center justify-between mt-6">
+                      {/* Score Gauge */}
+                      <div className="flex flex-col items-center">
+                        <div className="text-xs text-gray-500 mb-1">
+                          Sentiment Score
+                        </div>
+                        <div className="relative flex items-center justify-center">
+                          <svg width="90" height="90">
+                            <circle
+                              cx="45"
+                              cy="45"
+                              r="40"
+                              fill="none"
+                              stroke="#e5e7eb"
+                              strokeWidth="8"
+                            />
+                            <circle
+                              cx="45"
+                              cy="45"
+                              r="40"
+                              fill="none"
+                              stroke="#4f46e5"
+                              strokeWidth="8"
+                              strokeDasharray={2 * Math.PI * 40}
+                              strokeDashoffset={
+                                2 *
+                                Math.PI *
+                                40 *
+                                (1 - (sentiment.score || 0) / 100)
+                              }
+                              strokeLinecap="round"
+                              style={{ transition: "stroke-dashoffset 1s" }}
+                            />
+                          </svg>
+                          <span className="absolute text-xl font-bold text-primary">
+                            {sentiment.score}
+                          </span>
+                        </div>
+                        <span className="text-xs text-gray-400 mt-1">/100</span>
+                      </div>
+                      {/* Risk Level */}
+                      <div className="flex flex-col items-center">
+                        <div className="text-xs text-gray-500 mb-1">
+                          Risk Level
+                        </div>
+                        <span
+                          className={`px-4 py-1 rounded-full text-white font-semibold text-lg ${
+                            sentiment.riskLevel === "high"
+                              ? "bg-red-600"
+                              : sentiment.riskLevel === "moderate"
+                              ? "bg-yellow-500"
+                              : "bg-green-500"
+                          }`}
+                        >
+                          {sentiment?.riskLevel
+                            ? sentiment.riskLevel.charAt(0).toUpperCase() +
+                              sentiment.riskLevel.slice(1)
+                            : "-"}
+                        </span>
+                      </div>
+                      {/* Sentiment */}
+                      <div className="flex flex-col items-center">
+                        <div className="text-xs text-gray-500 mb-1">
+                          Sentiment
+                        </div>
+                        <span
+                          className={`px-4 py-1 rounded-full font-semibold text-lg ${
+                            sentiment.sentiment === "positive"
+                              ? "bg-green-100 text-green-700"
+                              : sentiment.sentiment === "negative"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-gray-200 text-gray-700"
+                          }`}
+                        >
+                          {sentiment.sentiment?.charAt(0).toUpperCase() +
+                            sentiment.sentiment?.slice(1) || "-"}
+                        </span>
+                      </div>
+                    </div>
+                    {/* Tags */}
+                    {sentiment.predicted_tags &&
+                      sentiment.predicted_tags.length > 0 && (
+                        <div className="mt-6">
+                          <div className="text-xs text-gray-500 mb-1">
+                            Relevant Tags
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {sentiment.predicted_tags.map((tag: string) => (
+                              <span
+                                key={tag}
+                                className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium shadow-sm"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    {/* Resource summary analytics */}
+                    {resources.length > 0 && (
+                      <div className="mt-8">
+                        <div className="flex items-center gap-2 mb-2">
+                          <BookOpen className="h-5 w-5 text-primary" />
+                          <span className="font-semibold text-primary">
+                            Recommended Resources
+                          </span>
+                          <span className="ml-2 text-xs text-gray-500">
+                            ({resources.length} found)
+                          </span>
+                        </div>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          {resources.slice(0, 4).map((resource) => (
+                            <div
+                              key={resource.id}
+                              className="rounded-lg border border-gray-200 bg-white shadow p-4 flex flex-col h-full transition hover:shadow-md hover:border-primary/60"
+                            >
+                              <div
+                                className="font-semibold text-primary mb-1 truncate"
+                                title={resource.title}
+                              >
+                                {resource.title}
+                              </div>
+                              {resource.description && (
+                                <div className="text-gray-700 text-sm mb-2 line-clamp-3">
+                                  {resource.description}
+                                </div>
+                              )}
+                              <div className="mt-auto flex items-center justify-between">
+                                {resource.url && (
+                                  <a
+                                    href={resource.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-sm font-medium text-blue-600 hover:text-blue-800 underline transition"
+                                  >
+                                    View Resource
+                                  </a>
+                                )}
+                                {resource.category && (
+                                  <span className="ml-2 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
+                                    {resource.category}
+                                  </span>
+                                )}
+                              </div>
+                              {resource.tags && resource.tags.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                  {resource.tags.map((tag) => (
+                                    <span
+                                      key={tag}
+                                      className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs"
+                                    >
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        {resources.length > 4 && (
+                          <div className="mt-2 text-center">
+                            <span className="text-xs text-gray-500">
+                              And {resources.length - 4} more resources
+                              available...
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {/* Appointment link */}
+                    {sentiment &&
+                      sentiment.requires_mental_health_professional && (
+                        <div className="mt-8 flex justify-center">
+                          <a
+                            href="/appointments/book"
+                            className="inline-block px-6 py-2 bg-red-600 text-white rounded font-semibold hover:bg-red-700 transition shadow"
+                          >
+                            Schedule an Appointment with a Mental Health
+                            Professional
+                          </a>
+                        </div>
+                      )}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
       </div>
     </TopNavLayout>
-  )
+  );
 }

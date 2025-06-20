@@ -26,10 +26,31 @@ export default function LoginPage() {
     setError("")
 
     try {
+      console.log("Attempting to sign in with:", email)
       await signIn(email, password)
+      console.log("Sign in successful, redirecting to dashboard")
       router.push("/dashboard")
     } catch (err: any) {
-      setError(err.message)
+      console.error("Login error:", err)
+      
+      // Provide more specific error messages
+      let errorMessage = "Failed to sign in. Please try again."
+      
+      if (err.message) {
+        if (err.message.includes("Invalid login credentials")) {
+          errorMessage = "Invalid email or password. Please check your credentials and try again."
+        } else if (err.message.includes("Email not confirmed")) {
+          errorMessage = "Please check your email and click the confirmation link before signing in."
+        } else if (err.message.includes("Too many requests")) {
+          errorMessage = "Too many login attempts. Please wait a moment before trying again."
+        } else if (err.message.includes("network") || err.message.includes("fetch")) {
+          errorMessage = "Network error. Please check your internet connection and try again."
+        } else {
+          errorMessage = `Login failed: ${err.message}`
+        }
+      }
+      
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }

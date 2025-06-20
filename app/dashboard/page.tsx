@@ -10,7 +10,7 @@ import { TopNavLayout } from "@/components/layout/top-nav-layout"
 import { getCurrentUser } from "@/lib/auth"
 import { supabase } from "@/lib/supabase/client"
 import type { User, Assessment } from "@/lib/types"
-import { Brain, BookOpen, TrendingUp, TrendingDown } from "lucide-react"
+import { Brain, BookOpen } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, LineChart, Line, PieChart, Pie, Cell, ResponsiveContainer } from "recharts"
 import Link from "next/link"
 
@@ -84,64 +84,18 @@ export default function DashboardPage() {
 
   if (!user) return null
 
-  // Process real data for charts
-  const processChartData = () => {
-    if (!allAssessments.length)
-      return { stressAnxietyData: [], sentimentData: [], commonConditions: {}, riskDistribution: {} }
-
-    const stressAnxietyData = allAssessments.map((assessment, index) => ({
-      date: new Date(assessment.created_at).toLocaleDateString(),
-      assessment: `Assessment ${index + 1}`,
-      stress: assessment.stress_score || 0,
-      anxiety: assessment.anxiety_score || 0,
-      depression: assessment.depression_score || 0,
-      wellbeing: assessment.overall_wellbeing_score || 0,
-    }))
-
-    const sentimentData = allAssessments.map((assessment, index) => ({
-      date: new Date(assessment.created_at).toLocaleDateString(),
-      assessment: `Assessment ${index + 1}`,
-      sentiment: assessment.sentiment_score ? (assessment.sentiment_score - 50) / 10 : 0, // Convert to -5 to +5 scale
-    }))
-
-    // Count common conditions
-    const commonConditions: Record<string, number> = {}
-    allAssessments.forEach((assessment) => {
-      if (assessment.predicted_conditions) {
-        assessment.predicted_conditions.forEach((condition) => {
-          const formatted = condition.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())
-          commonConditions[formatted] = (commonConditions[formatted] || 0) + 1
-        })
-      }
-    })
-
-    // Count risk distribution
-    const riskDistribution: Record<string, number> = {}
-    allAssessments.forEach((assessment) => {
-      const risk = assessment.predicted_risk_level || assessment.risk_level || "unknown"
-      riskDistribution[risk] = (riskDistribution[risk] || 0) + 1
-    })
-
-    return { stressAnxietyData, sentimentData, commonConditions, riskDistribution }
-  }
-
-  const { stressAnxietyData, sentimentData, commonConditions, riskDistribution } = processChartData()
-
-  // Convert to chart format
-  const commonConditionsData = Object.entries(commonConditions)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 5)
-    .map(([condition, count]) => ({
-      condition,
-      value: count / allAssessments.length, // Normalize to 0-1
-    }))
-
-  const riskDistributionData = Object.entries(riskDistribution).map(([level, count]) => ({
-    name: level.charAt(0).toUpperCase() + level.slice(1),
-    value: count,
-    color: level === "low" ? "#10b981" : level === "moderate" ? "#f59e0b" : level === "high" ? "#f97316" : "#ef4444",
+  // Prepare wellness score trend data
+  const wellnessTrendData = allAssessments.map((assessment, index) => ({
+    date: new Date(assessment.created_at).toLocaleDateString(),
+    assessment: `Assessment ${index + 1}`,
+    wellness: assessment.wellness_score ?? 0,
   }))
 
+  // Remove unused variables and functions
+  const currentRiskLevel = recentAssessment?.predicted_risk_level || recentAssessment?.risk_level || "moderate"
+  const lastAssessmentDate = recentAssessment ? new Date(recentAssessment.created_at).toLocaleDateString() : null
+
+  // Utility for risk badge color
   const getRiskLevelColor = (level?: string) => {
     switch (level) {
       case "low":
@@ -157,53 +111,6 @@ export default function DashboardPage() {
     }
   }
 
-  const getSentimentColor = (sentiment?: string) => {
-    switch (sentiment) {
-      case "positive":
-      case "very_positive":
-        return "bg-green-100 text-green-800"
-      case "neutral":
-        return "bg-yellow-100 text-yellow-800"
-      case "negative":
-      case "very_negative":
-        return "bg-red-100 text-red-800"
-      default:
-        return "bg-yellow-100 text-yellow-800"
-    }
-  }
-
-  const formatConditions = (conditions?: string[]) => {
-    if (!conditions || conditions.length === 0) return ["No specific conditions identified"]
-    return conditions.map((condition) => condition.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()))
-  }
-
-  const currentRiskLevel = recentAssessment?.predicted_risk_level || recentAssessment?.risk_level || "moderate"
-  const currentSentiment = recentAssessment?.predicted_sentiment || recentAssessment?.sentiment_label || "neutral"
-  const lastAssessmentDate = recentAssessment ? new Date(recentAssessment.created_at).toLocaleDateString() : null
-
-  // Get current metrics from most recent assessment
-  const currentStress = recentAssessment?.stress_score || 0
-  const currentAnxiety = recentAssessment?.anxiety_score || 0
-  const currentSleep = 7 - Math.floor((currentStress + currentAnxiety) / 25) // Estimate sleep based on stress/anxiety
-
-  // Calculate trends
-  const getStressTrend = () => {
-    if (stressAnxietyData.length < 2) return null
-    const recent = stressAnxietyData[stressAnxietyData.length - 1].stress
-    const previous = stressAnxietyData[stressAnxietyData.length - 2].stress
-    return recent > previous ? "up" : recent < previous ? "down" : "stable"
-  }
-
-  const getAnxietyTrend = () => {
-    if (stressAnxietyData.length < 2) return null
-    const recent = stressAnxietyData[stressAnxietyData.length - 1].anxiety
-    const previous = stressAnxietyData[stressAnxietyData.length - 2].anxiety
-    return recent > previous ? "up" : recent < previous ? "down" : "stable"
-  }
-
-  const stressTrend = getStressTrend()
-  const anxietyTrend = getAnxietyTrend()
-
   return (
     <TopNavLayout user={user}>
       <div className="max-w-7xl mx-auto space-y-8">
@@ -213,11 +120,9 @@ export default function DashboardPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Stress Level</p>
-                  <p className="text-3xl font-bold">{currentStress}</p>
+                  <p className="text-sm text-gray-600">Total Assessments</p>
+                  <p className="text-3xl font-bold">{assessmentCount}</p>
                 </div>
-                {stressTrend === "up" && <TrendingUp className="h-4 w-4 text-red-500" />}
-                {stressTrend === "down" && <TrendingDown className="h-4 w-4 text-green-500" />}
               </div>
             </CardContent>
           </Card>
@@ -226,11 +131,9 @@ export default function DashboardPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Anxiety Level</p>
-                  <p className="text-3xl font-bold">{currentAnxiety}</p>
+                  <p className="text-sm text-gray-600">Recent Wellness Score</p>
+                  <p className="text-3xl font-bold">{recentAssessment?.wellness_score ?? 0}</p>
                 </div>
-                {anxietyTrend === "up" && <TrendingUp className="h-4 w-4 text-red-500" />}
-                {anxietyTrend === "down" && <TrendingDown className="h-4 w-4 text-green-500" />}
               </div>
             </CardContent>
           </Card>
@@ -238,178 +141,41 @@ export default function DashboardPage() {
           <Card>
             <CardContent className="p-6">
               <div>
-                <p className="text-sm text-gray-600">Sleep Hours</p>
-                <p className="text-3xl font-bold">{Math.max(4, currentSleep)}</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div>
-                <p className="text-sm text-gray-600">Risk Level</p>
+                <p className="text-sm text-gray-600">Recent Risk Level</p>
                 <Badge className={`mt-2 ${getRiskLevelColor(currentRiskLevel)}`}>{currentRiskLevel}</Badge>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Analytics Charts */}
+        {/* Wellness Score Trend Chart */}
         {allAssessments.length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Stress & Anxiety Trends */}
-            <Card>
+            <Card className="col-span-2">
               <CardHeader>
-                <CardTitle>Stress & Anxiety Trends</CardTitle>
-                <CardDescription>Your stress and anxiety levels over time</CardDescription>
+                <CardTitle>Wellness Score Trend</CardTitle>
+                <CardDescription>Your wellness score over time</CardDescription>
               </CardHeader>
               <CardContent>
                 <ChartContainer
-                  config={{
-                    stress: { label: "Stress", color: "#ef4444" },
-                    anxiety: { label: "Anxiety", color: "#06b6d4" },
-                  }}
+                  config={{ wellness: { label: "Wellness Score", color: "#6366f1" } }}
                   className="h-[300px]"
                 >
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={stressAnxietyData}>
+                    <LineChart data={wellnessTrendData}>
                       <XAxis dataKey="date" />
                       <YAxis domain={[0, 100]} />
                       <ChartTooltip content={<ChartTooltipContent />} />
                       <Line
                         type="monotone"
-                        dataKey="stress"
-                        stroke="var(--color-stress)"
-                        strokeWidth={2}
-                        dot={{ r: 4 }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="anxiety"
-                        stroke="var(--color-anxiety)"
+                        dataKey="wellness"
+                        stroke="#6366f1"
                         strokeWidth={2}
                         dot={{ r: 4 }}
                       />
                     </LineChart>
                   </ResponsiveContainer>
                 </ChartContainer>
-              </CardContent>
-            </Card>
-
-            {/* Risk Level Distribution */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Risk Level Distribution</CardTitle>
-                <CardDescription>Distribution of your risk assessments</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer
-                  config={{
-                    low: { label: "Low Risk", color: "#10b981" },
-                    moderate: { label: "Moderate Risk", color: "#f59e0b" },
-                    high: { label: "High Risk", color: "#f97316" },
-                    critical: { label: "Critical Risk", color: "#ef4444" },
-                  }}
-                  className="h-[300px]"
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={riskDistributionData}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={80}
-                        dataKey="value"
-                        label={({ name, value }) => `${name} ${value}`}
-                      >
-                        {riskDistributionData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Common Conditions & Sentiment Analysis */}
-        {allAssessments.length > 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Common Conditions */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Common Conditions</CardTitle>
-                <CardDescription>Most frequently identified conditions</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {commonConditionsData.length > 0 ? (
-                  <ChartContainer
-                    config={{
-                      value: { label: "Frequency", color: "#6366f1" },
-                    }}
-                    className="h-[300px]"
-                  >
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={commonConditionsData} layout="horizontal">
-                        <XAxis type="number" domain={[0, 1]} />
-                        <YAxis dataKey="condition" type="category" width={100} />
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                        <Bar dataKey="value" fill="var(--color-value)" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </ChartContainer>
-                ) : (
-                  <div className="h-[300px] flex items-center justify-center text-gray-500">
-                    No conditions data available
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Sentiment Analysis */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Sentiment Analysis</CardTitle>
-                <CardDescription>Your emotional sentiment over time</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {sentimentData.length > 0 ? (
-                  <ChartContainer
-                    config={{
-                      sentiment: { label: "Sentiment", color: "#f59e0b" },
-                    }}
-                    className="h-[300px]"
-                  >
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={sentimentData}>
-                        <XAxis dataKey="date" />
-                        <YAxis
-                          domain={[-5, 5]}
-                          tickFormatter={(value) => {
-                            if (value >= 2) return "Positive"
-                            if (value <= -2) return "Negative"
-                            return "Neutral"
-                          }}
-                        />
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                        <Line
-                          type="monotone"
-                          dataKey="sentiment"
-                          stroke="var(--color-sentiment)"
-                          strokeWidth={2}
-                          dot={{ r: 4 }}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </ChartContainer>
-                ) : (
-                  <div className="h-[300px] flex items-center justify-center text-gray-500">
-                    No sentiment data available
-                  </div>
-                )}
               </CardContent>
             </Card>
           </div>
@@ -423,19 +189,7 @@ export default function DashboardPage() {
               <CardDescription className="text-gray-600">Completed on {lastAssessmentDate}</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {/* Predicted Conditions */}
-                <div>
-                  <h3 className="font-medium text-gray-900 mb-3">Predicted Conditions</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {formatConditions(recentAssessment?.predicted_conditions).map((condition, index) => (
-                      <Badge key={index} variant="outline" className="bg-gray-100 text-gray-800 border-gray-300">
-                        {condition}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Risk Level */}
                 <div>
                   <h3 className="font-medium text-gray-900 mb-3">Risk Level</h3>
@@ -443,24 +197,14 @@ export default function DashboardPage() {
                     {currentRiskLevel.toUpperCase()}
                   </Badge>
                 </div>
-
-                {/* Sentiment */}
+                {/* Wellness Score */}
                 <div>
-                  <h3 className="font-medium text-gray-900 mb-3">Sentiment</h3>
-                  <Badge className={`${getSentimentColor(currentSentiment)} px-3 py-1 text-sm font-medium`}>
-                    {currentSentiment.toUpperCase()}
-                  </Badge>
+                  <h3 className="font-medium text-gray-900 mb-3">Wellness Score</h3>
+                  <span className="text-2xl font-bold text-blue-700">
+                    {recentAssessment.wellness_score ?? 0}/100
+                  </span>
                 </div>
               </div>
-
-              {/* AI Analysis */}
-              {recentAssessment.ai_analysis && (
-                <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-                  <h4 className="font-medium text-gray-900 mb-2">AI Analysis</h4>
-                  <p className="text-gray-700 text-sm">{recentAssessment.ai_analysis}</p>
-                </div>
-              )}
-
               {/* Recommendations */}
               {recentAssessment.recommendations && recentAssessment.recommendations.length > 0 && (
                 <div className="mt-6">

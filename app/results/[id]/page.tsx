@@ -1,16 +1,26 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { useRouter, useParams } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { TopNavLayout } from "@/components/layout/top-nav-layout"
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
-import { getCurrentUser } from "@/lib/auth"
-import { supabase } from "@/lib/supabase/client"
-import type { User, Assessment } from "@/lib/types"
+import { useEffect, useState } from "react";
+import { useRouter, useParams } from "next/navigation";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { TopNavLayout } from "@/components/layout/top-nav-layout";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
+import { getCurrentUser } from "@/lib/auth";
+import { supabase } from "@/lib/supabase/client";
+import type { User, Assessment, Resource } from "@/lib/types";
 import {
   Brain,
   Calendar,
@@ -23,7 +33,13 @@ import {
   Info,
   Heart,
   Target,
-} from "lucide-react"
+  BookOpen,
+  ExternalLink,
+  Play,
+  FileText,
+  Headphones,
+  Star,
+} from "lucide-react";
 import {
   LineChart,
   Line,
@@ -33,41 +49,41 @@ import {
   ResponsiveContainer,
   Cell,
   PieChart as RechartsPieChart,
-} from "recharts"
-import Link from "next/link"
+} from "recharts";
+import Link from "next/link";
 
 export default function AssessmentResultPage() {
-  const [user, setUser] = useState<User | null>(null)
-  const [assessment, setAssessment] = useState<Assessment | null>(null)
-  const [historicalData, setHistoricalData] = useState<Assessment[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const router = useRouter()
-  const params = useParams()
+  const [user, setUser] = useState<User | null>(null);
+  const [assessment, setAssessment] = useState<Assessment | null>(null);
+  const [historicalData, setHistoricalData] = useState<Assessment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  const params = useParams();
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const currentUser = await getCurrentUser()
+        const currentUser = await getCurrentUser();
         if (!currentUser) {
-          router.push("/auth/login")
-          return
+          router.push("/auth/login");
+          return;
         }
         if (currentUser.role !== "student") {
-          router.push("/dashboard")
-          return
+          router.push("/dashboard");
+          return;
         }
-        setUser(currentUser)
+        setUser(currentUser);
 
         // Get student ID
         const { data: student, error: studentError } = await supabase
           .from("students")
           .select("id")
           .eq("user_id", currentUser.id)
-          .single()
+          .single();
 
         if (studentError || !student) {
-          throw new Error("Student profile not found")
+          throw new Error("Student profile not found");
         }
 
         // Get specific assessment
@@ -76,38 +92,39 @@ export default function AssessmentResultPage() {
           .select("*")
           .eq("id", params.id)
           .eq("student_id", student.id)
-          .single()
+          .single();
 
         if (assessmentError) {
-          throw new Error(`Assessment not found: ${assessmentError.message}`)
+          throw new Error(`Assessment not found: ${assessmentError.message}`);
         }
 
-        setAssessment(assessmentData)
+        setAssessment(assessmentData);
 
         // Get historical assessments for trends
-        const { data: historicalAssessments, error: historyError } = await supabase
-          .from("assessments")
-          .select("*")
-          .eq("student_id", student.id)
-          .order("created_at", { ascending: true })
-          .limit(10)
+        const { data: historicalAssessments, error: historyError } =
+          await supabase
+            .from("assessments")
+            .select("*")
+            .eq("student_id", student.id)
+            .order("created_at", { ascending: true })
+            .limit(10);
 
         if (historyError) {
-          console.warn("Could not load historical data:", historyError)
-          setError("Historical data unavailable")
+          console.warn("Could not load historical data:", historyError);
+          setError("Historical data unavailable");
         } else {
-          setHistoricalData(historicalAssessments || [])
+          setHistoricalData(historicalAssessments || []);
         }
       } catch (error: any) {
-        console.error("Error loading assessment:", error)
-        setError(error.message || "Failed to load assessment data")
+        console.error("Error loading assessment:", error);
+        setError(error.message || "Failed to load assessment data");
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
 
-    loadData()
-  }, [router, params.id])
+    loadData();
+  }, [router, params.id]);
 
   if (loading) {
     return (
@@ -117,17 +134,21 @@ export default function AssessmentResultPage() {
           <p>Loading assessment details...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (error) {
     return (
-      <TopNavLayout user={user}>
+      <TopNavLayout user={user || undefined}>
         <div className="max-w-2xl mx-auto">
           <Alert className="border-red-200 bg-red-50">
             <AlertTriangle className="h-4 w-4 text-red-600" />
-            <AlertTitle className="text-red-800">Error Loading Assessment</AlertTitle>
-            <AlertDescription className="text-red-700">{error}</AlertDescription>
+            <AlertTitle className="text-red-800">
+              Error Loading Assessment
+            </AlertTitle>
+            <AlertDescription className="text-red-700">
+              {error}
+            </AlertDescription>
           </Alert>
           <div className="mt-4">
             <Link href="/results">
@@ -139,65 +160,65 @@ export default function AssessmentResultPage() {
           </div>
         </div>
       </TopNavLayout>
-    )
+    );
   }
 
-  if (!user || !assessment) return null
+  if (!user || !assessment) return null;
 
   const getRiskLevelColor = (level?: string) => {
     switch (level) {
       case "low":
-        return "bg-green-100 text-green-800 border-green-200"
+        return "bg-green-100 text-green-800 border-green-200";
       case "moderate":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200"
+        return "bg-yellow-100 text-yellow-800 border-yellow-200";
       case "high":
-        return "bg-orange-100 text-orange-800 border-orange-200"
+        return "bg-orange-100 text-orange-800 border-orange-200";
       case "critical":
-        return "bg-red-100 text-red-800 border-red-200"
+        return "bg-red-100 text-red-800 border-red-200";
       default:
-        return "bg-gray-100 text-gray-800 border-gray-200"
+        return "bg-gray-100 text-gray-800 border-gray-200";
     }
-  }
+  };
 
   const getRiskLevelIcon = (level?: string) => {
     switch (level) {
       case "low":
-        return <CheckCircle className="h-4 w-4" />
+        return <CheckCircle className="h-4 w-4" />;
       case "moderate":
-        return <AlertCircle className="h-4 w-4" />
+        return <AlertCircle className="h-4 w-4" />;
       case "high":
-        return <AlertTriangle className="h-4 w-4" />
+        return <AlertTriangle className="h-4 w-4" />;
       case "critical":
-        return <AlertTriangle className="h-4 w-4" />
+        return <AlertTriangle className="h-4 w-4" />;
       default:
-        return <AlertCircle className="h-4 w-4" />
+        return <AlertCircle className="h-4 w-4" />;
     }
-  }
+  };
 
   const getScoreColor = (score?: number) => {
-    if (!score) return "text-gray-500"
-    if (score >= 70) return "text-red-600"
-    if (score >= 50) return "text-orange-600"
-    if (score >= 30) return "text-yellow-600"
-    return "text-green-600"
-  }
+    if (!score) return "text-gray-500";
+    if (score >= 70) return "text-red-600";
+    if (score >= 50) return "text-orange-600";
+    if (score >= 30) return "text-yellow-600";
+    return "text-green-600";
+  };
 
   const getSentimentColor = (sentiment?: string) => {
     switch (sentiment) {
       case "very_positive":
-        return "text-green-600"
+        return "text-green-600";
       case "positive":
-        return "text-green-500"
+        return "text-green-500";
       case "neutral":
-        return "text-gray-500"
+        return "text-gray-500";
       case "negative":
-        return "text-orange-500"
+        return "text-orange-500";
       case "very_negative":
-        return "text-red-600"
+        return "text-red-600";
       default:
-        return "text-gray-500"
+        return "text-gray-500";
     }
-  }
+  };
 
   // Prepare chart data from real assessment data
   const chartData = historicalData.map((item, index) => ({
@@ -208,32 +229,39 @@ export default function AssessmentResultPage() {
     depression: item.depression_score || 0,
     wellbeing: item.overall_wellbeing_score || 0,
     sentiment: item.sentiment_score || 50,
-  }))
+  }));
 
   // Risk level distribution from real data
-  const riskDistribution = historicalData.reduce(
-    (acc, item) => {
-      const risk = item.risk_level || "unknown"
-      acc[risk] = (acc[risk] || 0) + 1
-      return acc
-    },
-    {} as Record<string, number>,
-  )
+  const riskDistribution = historicalData.reduce((acc, item) => {
+    const risk = item.risk_level || "unknown";
+    acc[risk] = (acc[risk] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
 
   const pieData = Object.entries(riskDistribution).map(([level, count]) => ({
     name: level.charAt(0).toUpperCase() + level.slice(1),
     value: count,
-    color: level === "low" ? "#10b981" : level === "moderate" ? "#f59e0b" : level === "high" ? "#f97316" : "#ef4444",
-  }))
+    color:
+      level === "low"
+        ? "#10b981"
+        : level === "moderate"
+        ? "#f59e0b"
+        : level === "high"
+        ? "#f97316"
+        : "#ef4444",
+  }));
 
   // Conditions data from real API response
   const conditionsData = assessment.predicted_conditions
     ? assessment.predicted_conditions.map((condition: string) => ({
-        name: condition.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
+        name: condition
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, (l) => l.toUpperCase()),
         value: 1,
         color: "#8b5cf6",
       }))
-    : []
+    : [];
+  console.log("assessment", assessment);
 
   return (
     <TopNavLayout user={user}>
@@ -248,7 +276,9 @@ export default function AssessmentResultPage() {
               </Button>
             </Link>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Assessment Results</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Assessment Results
+          </h1>
           <div className="flex items-center gap-2 text-gray-600">
             <Calendar className="h-4 w-4" />
             <span>
@@ -267,10 +297,12 @@ export default function AssessmentResultPage() {
         {assessment.professional_help_needed && (
           <Alert className="mb-6 border-orange-200 bg-orange-50">
             <AlertTriangle className="h-4 w-4 text-orange-600" />
-            <AlertTitle className="text-orange-800">Professional Support Recommended</AlertTitle>
+            <AlertTitle className="text-orange-800">
+              Professional Support Recommended
+            </AlertTitle>
             <AlertDescription className="text-orange-700">
-              Based on your assessment, we recommend speaking with a mental health professional for personalized support
-              and guidance.
+              Based on your assessment, we recommend speaking with a mental
+              health professional for personalized support and guidance.
             </AlertDescription>
           </Alert>
         )}
@@ -279,10 +311,13 @@ export default function AssessmentResultPage() {
         {assessment.crisis_indicators && (
           <Alert className="mb-6 border-red-200 bg-red-50">
             <AlertTriangle className="h-4 w-4 text-red-600" />
-            <AlertTitle className="text-red-800">Immediate Support Needed</AlertTitle>
+            <AlertTitle className="text-red-800">
+              Immediate Support Needed
+            </AlertTitle>
             <AlertDescription className="text-red-700">
-              Your responses indicate you may need immediate support. Please consider contacting a crisis helpline or
-              emergency services if you're in immediate danger.
+              Your responses indicate you may need immediate support. Please
+              consider contacting a crisis helpline or emergency services if
+              you're in immediate danger.
             </AlertDescription>
           </Alert>
         )}
@@ -291,51 +326,93 @@ export default function AssessmentResultPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Stress Level</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Stress Level
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className={`text-2xl font-bold ${getScoreColor(assessment.stress_score)}`}>
-                {assessment.stress_score ? `${assessment.stress_score}/100` : "N/A"}
+              <div
+                className={`text-2xl font-bold ${getScoreColor(
+                  assessment.stress_score
+                )}`}
+              >
+                {assessment.stress_score
+                  ? `${assessment.stress_score}/100`
+                  : "N/A"}
               </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Anxiety Level</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Anxiety Level
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className={`text-2xl font-bold ${getScoreColor(assessment.anxiety_score)}`}>
-                {assessment.anxiety_score ? `${assessment.anxiety_score}/100` : "N/A"}
+              <div
+                className={`text-2xl font-bold ${getScoreColor(
+                  assessment.anxiety_score
+                )}`}
+              >
+                {assessment.anxiety_score
+                  ? `${assessment.anxiety_score}/100`
+                  : "N/A"}
               </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Sentiment Score</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Sentiment Score
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className={`text-2xl font-bold ${getSentimentColor(assessment.sentiment_label)}`}>
-                {assessment.sentiment_score ? `${assessment.sentiment_score}/100` : "N/A"}
+              <div
+                className={`text-2xl font-bold ${getSentimentColor(
+                  assessment.sentiment_label
+                )}`}
+              >
+                {assessment.sentiment_score
+                  ? `${assessment.sentiment_score}/100`
+                  : "N/A"}
               </div>
               {assessment.sentiment_label && (
-                <div className="text-sm text-gray-500 capitalize">{assessment.sentiment_label.replace("_", " ")}</div>
+                <div className="text-sm text-gray-500 capitalize">
+                  {assessment.sentiment_label.replace("_", " ")}
+                </div>
               )}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Risk Level</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Risk Level
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <Badge
-                className={`${getRiskLevelColor(assessment.predicted_risk_level || assessment.risk_level)} flex items-center gap-1 w-fit`}
+                className={`${getRiskLevelColor(
+                  assessment.predicted_risk_level || assessment.risk_level
+                )} flex items-center gap-1 w-fit`}
               >
-                {getRiskLevelIcon(assessment.predicted_risk_level || assessment.risk_level)}
-                {(assessment.predicted_risk_level || assessment.risk_level || "Unknown").charAt(0).toUpperCase() +
-                  (assessment.predicted_risk_level || assessment.risk_level || "unknown").slice(1)}
+                {getRiskLevelIcon(
+                  assessment.predicted_risk_level || assessment.risk_level
+                )}
+                {(
+                  assessment.predicted_risk_level ||
+                  assessment.risk_level ||
+                  "Unknown"
+                )
+                  .charAt(0)
+                  .toUpperCase() +
+                  (
+                    assessment.predicted_risk_level ||
+                    assessment.risk_level ||
+                    "unknown"
+                  ).slice(1)}
               </Badge>
             </CardContent>
           </Card>
@@ -409,7 +486,9 @@ export default function AssessmentResultPage() {
                 <div className="h-64 flex items-center justify-center border-2 border-dashed border-gray-200 rounded-lg">
                   <div className="text-center">
                     <TrendingUp className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                    <p className="text-gray-500">Take more assessments to see trends</p>
+                    <p className="text-gray-500">
+                      Take more assessments to see trends
+                    </p>
                   </div>
                 </div>
               )}
@@ -423,7 +502,9 @@ export default function AssessmentResultPage() {
                 <PieChart className="h-5 w-5 text-purple-600" />
                 Risk Level Distribution
               </CardTitle>
-              <CardDescription>Distribution of your risk assessments</CardDescription>
+              <CardDescription>
+                Distribution of your risk assessments
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {pieData.length > 0 && historicalData.length > 1 ? (
@@ -451,7 +532,13 @@ export default function AssessmentResultPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     <RechartsPieChart>
                       <ChartTooltip content={<ChartTooltipContent />} />
-                      <RechartsPieChart data={pieData} cx="50%" cy="50%" outerRadius={80} dataKey="value">
+                      <RechartsPieChart
+                        data={pieData}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        dataKey="value"
+                      >
                         {pieData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
@@ -467,19 +554,27 @@ export default function AssessmentResultPage() {
                         assessment.predicted_risk_level === "low"
                           ? "bg-gradient-to-br from-green-400 to-green-500"
                           : assessment.predicted_risk_level === "moderate"
-                            ? "bg-gradient-to-br from-yellow-400 to-orange-500"
-                            : assessment.predicted_risk_level === "high"
-                              ? "bg-gradient-to-br from-orange-400 to-red-500"
-                              : assessment.predicted_risk_level === "critical"
-                                ? "bg-gradient-to-br from-red-400 to-red-600"
-                                : "bg-gradient-to-br from-gray-400 to-gray-500"
+                          ? "bg-gradient-to-br from-yellow-400 to-orange-500"
+                          : assessment.predicted_risk_level === "critical"
+                          ? "bg-gradient-to-br from-red-400 to-red-600"
+                          : assessment.risk_level === "high"
+                          ? "bg-gradient-to-br from-orange-400 to-red-500"
+                          : "bg-gradient-to-br from-gray-400 to-gray-500"
                       }`}
                     >
                       <div className="text-white font-semibold text-sm text-center">
-                        {(assessment.predicted_risk_level || assessment.risk_level || "Unknown")
+                        {(
+                          assessment.predicted_risk_level ||
+                          assessment.risk_level ||
+                          "Unknown"
+                        )
                           .charAt(0)
                           .toUpperCase() +
-                          (assessment.predicted_risk_level || assessment.risk_level || "unknown").slice(1)}
+                          (
+                            assessment.predicted_risk_level ||
+                            assessment.risk_level ||
+                            "unknown"
+                          ).slice(1)}
                       </div>
                     </div>
                     <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-sm text-gray-600">
@@ -501,22 +596,31 @@ export default function AssessmentResultPage() {
                 <Heart className="h-5 w-5 text-purple-600" />
                 Identified Conditions
               </CardTitle>
-              <CardDescription>Conditions identified from your assessment</CardDescription>
+              <CardDescription>
+                Conditions identified from your assessment
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {conditionsData.length > 0 ? (
                 <div className="space-y-3">
                   {conditionsData.map((condition, index) => (
-                    <div key={index} className="flex items-center gap-3 p-3 bg-purple-50 rounded-lg">
+                    <div
+                      key={index}
+                      className="flex items-center gap-3 p-3 bg-purple-50 rounded-lg"
+                    >
                       <div className="w-3 h-3 bg-purple-600 rounded-full"></div>
-                      <span className="text-gray-700 font-medium">{condition.name}</span>
+                      <span className="text-gray-700 font-medium">
+                        {condition.name}
+                      </span>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="text-center py-8">
                   <Heart className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                  <p className="text-gray-500">No specific conditions identified</p>
+                  <p className="text-gray-500">
+                    No specific conditions identified
+                  </p>
                 </div>
               )}
             </CardContent>
@@ -529,12 +633,16 @@ export default function AssessmentResultPage() {
                 <Brain className="h-5 w-5 text-purple-600" />
                 AI Analysis
               </CardTitle>
-              <CardDescription>Detailed analysis of your mental health state</CardDescription>
+              <CardDescription>
+                Detailed analysis of your mental health state
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 {assessment.ai_analysis ? (
-                  <div className="text-sm text-gray-700 leading-relaxed">{assessment.ai_analysis}</div>
+                  <div className="text-sm text-gray-700 leading-relaxed">
+                    {assessment.ai_analysis}
+                  </div>
                 ) : (
                   <div className="text-center py-8">
                     <Info className="h-8 w-8 mx-auto mb-2 text-gray-400" />
@@ -547,51 +655,225 @@ export default function AssessmentResultPage() {
         </div>
 
         {/* Recommendations - Using Real API Data */}
-        {assessment.recommendations && assessment.recommendations.length > 0 && (
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Target className="h-5 w-5 text-purple-600" />
-                Personalized Recommendations
-              </CardTitle>
-              <CardDescription>AI-generated suggestions based on your assessment</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {assessment.recommendations.map((recommendation, index) => (
-                  <div key={index} className="flex items-start gap-3 p-4 bg-purple-50 rounded-lg">
-                    <div className="w-2 h-2 bg-purple-600 rounded-full mt-2 flex-shrink-0"></div>
-                    <p className="text-gray-700">{recommendation}</p>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {assessment.recommendations &&
+          assessment.recommendations.length > 0 && (
+            <Card className="mb-8">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5 text-purple-600" />
+                  Personalized Recommendations
+                </CardTitle>
+                <CardDescription>
+                  AI-generated suggestions based on your assessment
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {assessment.recommendations.map((recommendation, index) => (
+                    <div
+                      key={index}
+                      className="flex items-start gap-3 p-4 bg-purple-50 rounded-lg"
+                    >
+                      <div className="w-2 h-2 bg-purple-600 rounded-full mt-2 flex-shrink-0"></div>
+                      <p className="text-gray-700">{recommendation}</p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
         {/* Immediate Actions - Using Real API Data */}
-        {assessment.immediate_actions && assessment.immediate_actions.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-                Immediate Actions
-              </CardTitle>
-              <CardDescription>Steps you can take right now</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {assessment.immediate_actions.map((action, index) => (
-                  <div key={index} className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
-                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                    <p className="text-gray-700">{action}</p>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {assessment.immediate_actions &&
+          assessment.immediate_actions.length > 0 && (
+            <Card className="mb-8">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  Immediate Actions
+                </CardTitle>
+                <CardDescription>Steps you can take right now</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {assessment.immediate_actions.map((action, index) => (
+                    <div
+                      key={index}
+                      className="flex items-start gap-3 p-3 bg-green-50 rounded-lg"
+                    >
+                      <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                      <p className="text-gray-700">{action}</p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+        {/* Recommended Resources - Based on Predicted Conditions */}
+        {assessment.recommended_resources &&
+          assessment.recommended_resources.length > 0 && (
+            <Card className="mb-8">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BookOpen className="h-5 w-5 text-blue-600" />
+                  Recommended Resources
+                </CardTitle>
+                <CardDescription>
+                  Resources matched to your assessment results
+                  {assessment.wellness_score && (
+                    <span className="ml-2 text-xs text-gray-500">
+                      • Wellness Score: {assessment.wellness_score}/100
+                    </span>
+                  )}
+                  {assessment.resource_coverage_score && (
+                    <span className="ml-2 text-xs text-gray-500">
+                      • Coverage:{" "}
+                      {Math.round(assessment.resource_coverage_score * 100)}%
+                    </span>
+                  )}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {assessment.recommended_resources.map((resource, index) => {
+                    const getResourceIcon = (resourceType: string) => {
+                      switch (resourceType.toLowerCase()) {
+                        case "article":
+                          return <FileText className="h-4 w-4" />;
+                        case "video":
+                          return <Play className="h-4 w-4" />;
+                        case "audio":
+                        case "pdf":
+                          return <Headphones className="h-4 w-4" />;
+                        case "external_link":
+                          return <ExternalLink className="h-4 w-4" />;
+                        default:
+                          return <BookOpen className="h-4 w-4" />;
+                      }
+                    };
+
+                    const getTypeColor = (resourceType: string) => {
+                      switch (resourceType.toLowerCase()) {
+                        case "article":
+                          return "bg-blue-100 text-blue-800 border-blue-200";
+                        case "video":
+                          return "bg-red-100 text-red-800 border-red-200";
+                        case "audio":
+                        case "pdf":
+                          return "bg-purple-100 text-purple-800 border-purple-200";
+                        case "external_link":
+                          return "bg-green-100 text-green-800 border-green-200";
+                        default:
+                          return "bg-gray-100 text-gray-800 border-gray-200";
+                      }
+                    };
+
+                    return (
+                      <div
+                        key={index}
+                        className="group border border-gray-200 rounded-lg p-4 hover:border-blue-300 hover:shadow-md transition-all duration-200"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                            {getResourceIcon(resource.resource_type)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <h4 className="font-semibold text-gray-900 line-clamp-2 group-hover:text-blue-600 transition-colors">
+                                {resource.title}
+                              </h4>
+                            </div>
+
+                            <div className="flex items-center gap-2 mb-3">
+                              <Badge
+                                className={`text-xs ${getTypeColor(
+                                  resource.resource_type
+                                )}`}
+                              >
+                                {resource.resource_type
+                                  .charAt(0)
+                                  .toUpperCase() +
+                                  resource.resource_type.slice(1)}
+                              </Badge>
+                              {resource.category && (
+                                <Badge variant="outline" className="text-xs">
+                                  {resource.category
+                                    .replace(/_/g, " ")
+                                    .replace(/\b\w/g, (l) => l.toUpperCase())}
+                                </Badge>
+                              )}
+                            </div>
+
+                            {resource.description && (
+                              <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                                {resource.description}
+                              </p>
+                            )}
+
+                            {resource.tags && resource.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mb-3">
+                                {resource.tags
+                                  .slice(0, 3)
+                                  .map((tag, tagIndex) => (
+                                    <span
+                                      key={tagIndex}
+                                      className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-700"
+                                    >
+                                      {tag.replace(/_/g, " ")}
+                                    </span>
+                                  ))}
+                                {resource.tags.length > 3 && (
+                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-500">
+                                    +{resource.tags.length - 3} more
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            {resource.url && (
+                              <a
+                                href={resource.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
+                              >
+                                Access Resource
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {assessment.matched_resource_tags &&
+                  assessment.matched_resource_tags.length > 0 && (
+                    <div className="mt-6 pt-4 border-t border-gray-200">
+                      <h5 className="text-sm font-medium text-gray-700 mb-2">
+                        Matched Conditions:
+                      </h5>
+                      <div className="flex flex-wrap gap-2">
+                        {assessment.matched_resource_tags.map((tag, index) => (
+                          <Badge
+                            key={index}
+                            variant="outline"
+                            className="text-xs"
+                          >
+                            {tag
+                              .replace(/_/g, " ")
+                              .replace(/\b\w/g, (l) => l.toUpperCase())}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+              </CardContent>
+            </Card>
+          )}
       </div>
     </TopNavLayout>
-  )
+  );
 }
